@@ -1,0 +1,59 @@
+name: Deploy frontend to GitHub Pages
+
+# Publishes the React SPA to GitHub Pages on every push to main.
+# Requires: repo is PUBLIC (Pages is paid on private repos) and Pages "Source"
+# is set to "GitHub Actions" (this workflow enables it automatically).
+#
+# The deployed site talks to the backend at VITE_API_BASE_URL below — update it
+# if your API URL differs, and make sure that backend's CORS_ORIGINS allows
+# https://<owner>.github.io  (or set it to "*").
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build
+        run: npm run build
+        env:
+          VITE_BASE: /fcc-intelligence/
+          VITE_API_BASE_URL: https://fcc-pipeline.onrender.com
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
