@@ -41,11 +41,16 @@ def _check_token(token: str | None) -> None:
 
 
 @router.post("/ingest", response_model=JobOut, status_code=202)
-def start_ingest(
+async def start_ingest(
     req: IngestRequest,
     x_ingest_token: str | None = Header(default=None),
 ) -> JobOut:
-    """Start a background ingestion job and return its id immediately."""
+    """Start a background ingestion job and return its id immediately.
+
+    Must be ``async`` so ``start_job`` can schedule the work with
+    ``asyncio.create_task`` on the running event loop (a sync endpoint would run
+    in a threadpool with no loop and raise ``RuntimeError``).
+    """
     _check_token(x_ingest_token)
     job = start_job(req.company, provider=req.provider, api_key=req.api_key)
     return JobOut(**job.to_dict())

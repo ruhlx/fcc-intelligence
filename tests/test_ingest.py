@@ -42,11 +42,13 @@ def test_settings_for_no_overrides_returns_base() -> None:
 
 @pytest.fixture
 def client(monkeypatch) -> TestClient:
-    # Replace the real background runner so no crawl/LLM/DB work happens.
-    def fake_start(company: str, *, provider=None, api_key=None):
-        return jobs.create_job(company)
+    # Stub only the actual crawl/LLM/DB work, but keep the REAL start_job so the
+    # endpoint's asyncio.create_task scheduling is exercised (regression guard:
+    # a sync endpoint would raise "no running event loop" here).
+    async def fake_run(job, provider, api_key):
+        job.status = "completed"
 
-    monkeypatch.setattr("app.api.routes.ingest.start_job", fake_start)
+    monkeypatch.setattr(jobs, "_run", fake_run)
     return TestClient(create_app())
 
 
@@ -55,7 +57,7 @@ def test_start_and_get_ingest_job(client: TestClient) -> None:
     assert resp.status_code == 202
     body = resp.json()
     assert body["company"] == "u-blox"
-    assert body["status"] == "pending"
+    assert body["status"] in ("pending", "running", "completed")
 
     got = client.get(f"/ingest/{body['id']}")
     assert got.status_code == 200
@@ -71,10 +73,10 @@ def test_get_unknown_job_404(client: TestClient) -> None:
 
 
 def test_ingest_token_enforced(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "app.api.routes.ingest.start_job",
-        lambda company, *, provider=None, api_key=None: jobs.create_job(company),
-    )
+    async def fake_run(job, provider, api_key):
+        job.status = "completed"
+
+    monkeypatch.setattr(jobs, "_run", fake_run)
     monkeypatch.setattr(
         "app.api.routes.ingest.get_settings", lambda: Settings(ingest_token="secret")
     )
