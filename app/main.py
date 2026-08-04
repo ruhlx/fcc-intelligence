@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -17,10 +20,25 @@ def create_app() -> FastAPI:
     configure_logging(level=settings.log_level, fmt=settings.log_format)
     logger = get_logger(__name__)
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # Apply migrations on boot when enabled (free-tier deploys have no
+        # pre-deploy hook). Failures are logged but don't block startup, so
+        # /health and /docs stay reachable for debugging.
+        if settings.auto_migrate:
+            from app.db.migrate import run_migrations
+
+            try:
+                run_migrations()
+            except Exception as exc:  # broad: never crash boot on migration error
+                logger.error("auto_migrate_failed", error=str(exc))
+        yield
+
     app = FastAPI(
         title="FCC Regulatory Contact Intelligence Platform",
         version="0.1.0",
         summary="Searchable database of product-compliance contacts from FCC filings.",
+        lifespan=lifespan,
     )
 
     app.add_middleware(

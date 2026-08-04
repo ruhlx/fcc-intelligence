@@ -52,8 +52,9 @@ tests/          pytest suite
 ## One-click deploy (Render)
 
 The repo ships a [`render.yaml`](render.yaml) Blueprint that provisions the whole
-stack — managed Postgres, the FastAPI API (with `alembic upgrade head` run
-automatically before each deploy), and the static frontend.
+stack — managed Postgres, the FastAPI API, and the static frontend. The API runs
+`alembic upgrade head` **on startup** (via `AUTO_MIGRATE=true`), so no paid
+pre-deploy step is required — it works entirely on Render's free tier.
 
 1. In Render: **New → Blueprint** and select this repo.
 2. When prompted, provide the secrets marked `sync: false`: your `GEMINI_API_KEY`

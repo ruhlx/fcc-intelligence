@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # Optional shared secret; when set, /ingest requires an X-Ingest-Token header.
     ingest_token: str = Field(default="")
 
+    # Run `alembic upgrade head` on app startup (free-tier friendly; no paid
+    # pre-deploy step needed). Off by default so tests and the CLI don't migrate.
+    auto_migrate: bool = Field(default=False)
+
     @field_validator("database_url")
     @classmethod
     def _normalise_db_url(cls, value: str) -> str:

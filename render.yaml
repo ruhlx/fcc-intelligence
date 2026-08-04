@@ -18,8 +18,6 @@ services:
     plan: free
     autoDeploy: true
     buildCommand: pip install poetry && poetry install
-    # Runs after build, before traffic — creates/updates the DB schema.
-    preDeployCommand: alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
@@ -29,6 +27,10 @@ services:
         fromDatabase:
           name: fcc-db
           property: connectionString
+      # Free-tier friendly: the app runs `alembic upgrade head` on startup
+      # instead of a paid pre-deploy command.
+      - key: AUTO_MIGRATE
+        value: "true"
       - key: LLM_PROVIDER
         value: gemini
       - key: GEMINI_API_KEY
