@@ -1,0 +1,78 @@
+"""Application configuration loaded from environment / .env (Stage 10)."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Strongly-typed application settings.
+
+    Values are read from environment variables and an optional ``.env`` file.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # LLM provider selection: "openai" or "gemini".
+    llm_provider: str = Field(default="openai")
+
+    # OpenAI
+    openai_api_key: str = Field(default="", description="OpenAI API key.")
+    openai_model: str = Field(default="gpt-4o-2024-08-06")
+
+    # Google Gemini
+    gemini_api_key: str = Field(default="", description="Google Gemini API key.")
+    gemini_model: str = Field(default="gemini-2.5-flash")
+
+    # Database
+    database_url: str = Field(
+        default="postgresql+psycopg://fcc:fcc@localhost:5432/fcc",
+        description="SQLAlchemy database URL.",
+    )
+
+    # Storage
+    data_directory: Path = Field(default=Path("./data"))
+
+    # Logging
+    log_level: str = Field(default="INFO")
+    log_format: str = Field(default="console", description="'console' or 'json'.")
+
+    # API / CORS — comma-separated list of allowed browser origins for the SPA.
+    cors_origins: str = Field(
+        default="http://localhost:8080,http://localhost:5173,http://localhost:4173"
+    )
+
+    # Crawler / HTTP
+    fcc_base_url: str = Field(default="https://apps.fcc.gov/oetcf/eas/reports")
+    http_timeout: float = Field(default=30.0)
+    http_max_retries: int = Field(default=3)
+    crawl_concurrency: int = Field(default=4)
+
+    @property
+    def pdf_directory(self) -> Path:
+        """Directory where downloaded PDFs are stored."""
+        return self.data_directory / "pdfs"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Parsed list of allowed CORS origins."""
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    def ensure_directories(self) -> None:
+        """Create data directories if they do not yet exist."""
+        self.pdf_directory.mkdir(parents=True, exist_ok=True)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Return a cached :class:`Settings` instance (dependency-injection friendly)."""
+    return Settings()
