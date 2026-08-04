@@ -13,7 +13,12 @@ export function ContactsTable({ contacts, loading, error }: Props) {
     return <div className="state state--error">⚠️ {error}</div>;
   }
   if (loading) {
-    return <div className="state">Loading contacts…</div>;
+    return (
+      <div className="state">
+        Loading contacts… <span className="state__muted">(the free-tier API may take
+        ~30s to wake up on first load)</span>
+      </div>
+    );
   }
   if (contacts.length === 0) {
     return (

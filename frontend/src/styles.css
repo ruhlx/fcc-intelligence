@@ -411,6 +411,10 @@ body {
   color: #b42318;
   border-color: #fecdca;
 }
+.state__muted {
+  color: var(--muted);
+  font-size: 0.85em;
+}
 .state code {
   background: var(--bg);
   padding: 2px 6px;

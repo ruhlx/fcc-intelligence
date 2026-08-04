@@ -21,6 +21,38 @@ export class ApiError extends Error {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Fetch with automatic retry for cold starts. Render's free tier sleeps after
+ * ~15 min idle; the first request then fails (network error) or 502/503 while
+ * the service wakes (~30-60s). We retry those transient failures so the UI
+ * self-heals instead of showing a hard "cannot reach API" error.
+ */
+async function fetchWithWake(url: string, init?: RequestInit): Promise<Response> {
+  const delaysMs = [1000, 2000, 4000, 6000, 8000, 10000]; // ~31s of retries
+  for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
+    try {
+      const resp = await fetch(url, init);
+      // 502/503/504 are the gateway's "still waking" responses — retry them.
+      if (resp.status >= 502 && resp.status <= 504 && attempt < delaysMs.length) {
+        await sleep(delaysMs[attempt]);
+        continue;
+      }
+      return resp;
+    } catch {
+      if (attempt < delaysMs.length) {
+        await sleep(delaysMs[attempt]);
+        continue;
+      }
+    }
+  }
+  throw new ApiError(
+    `Cannot reach API at ${BASE_URL} after several retries. The server may be waking up — try again in a moment.`,
+    0,
+  );
+}
+
 async function getJson<T>(path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`);
   if (params) {
@@ -28,12 +60,9 @@ async function getJson<T>(path: string, params?: Record<string, string>): Promis
       if (value) url.searchParams.set(key, value);
     }
   }
-  let resp: Response;
-  try {
-    resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
-  } catch (cause) {
-    throw new ApiError(`Cannot reach API at ${BASE_URL}. Is the backend running?`, 0);
-  }
+  const resp = await fetchWithWake(url.toString(), {
+    headers: { Accept: "application/json" },
+  });
   if (!resp.ok) {
     throw new ApiError(`Request failed (${resp.status}) for ${path}`, resp.status);
   }
@@ -41,16 +70,11 @@ async function getJson<T>(path: string, params?: Record<string, string>): Promis
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  let resp: Response;
-  try {
-    resp = await fetch(`${BASE_URL}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new ApiError(`Cannot reach API at ${BASE_URL}. Is the backend running?`, 0);
-  }
+  const resp = await fetchWithWake(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!resp.ok) {
     let detail = `Request failed (${resp.status})`;
     try {
