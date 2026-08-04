@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +38,27 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://fcc:fcc@localhost:5432/fcc",
         description="SQLAlchemy database URL.",
     )
+
+    # Optional shared secret; when set, /ingest requires an X-Ingest-Token header.
+    ingest_token: str = Field(default="")
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalise_db_url(cls, value: str) -> str:
+        """Coerce Render/Heroku-style URLs to the SQLAlchemy + psycopg3 driver.
+
+        Providers hand out ``postgres://`` (or ``postgresql://``) URLs, which
+        SQLAlchemy 2.0 cannot use directly with psycopg3. This rewrites them to
+        ``postgresql+psycopg://`` so ``DATABASE_URL`` can be pasted verbatim.
+        """
+        for prefix in ("postgresql+psycopg://", "sqlite"):
+            if value.startswith(prefix):
+                return value
+        if value.startswith("postgres://"):
+            return "postgresql+psycopg://" + value.removeprefix("postgres://")
+        if value.startswith("postgresql://"):
+            return "postgresql+psycopg://" + value.removeprefix("postgresql://")
+        return value
 
     # Storage
     data_directory: Path = Field(default=Path("./data"))

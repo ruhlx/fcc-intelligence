@@ -1,0 +1,59 @@
+# Render Blueprint — provisions the whole stack in one click.
+# In Render: New → Blueprint → pick this repo. You'll be asked only for the
+# secret values marked `sync: false` (your LLM API key, and the frontend's API URL).
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: fcc-db
+    plan: free
+    databaseName: fcc
+    user: fcc
+
+services:
+  # --- FastAPI backend ---
+  - type: web
+    name: fcc-api
+    runtime: python
+    plan: free
+    autoDeploy: true
+    buildCommand: pip install poetry && poetry install
+    # Runs after build, before traffic — creates/updates the DB schema.
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fcc-db
+          property: connectionString
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false          # paste your Gemini key (or leave blank, provide in the UI)
+      - key: OPENAI_API_KEY
+        sync: false          # paste your OpenAI key if using LLM_PROVIDER=openai
+      - key: DATA_DIRECTORY
+        value: /tmp/fcc-data
+      - key: LOG_FORMAT
+        value: json
+      - key: CORS_ORIGINS
+        value: "*"           # single-tenant tool; allow the frontend from any origin
+      - key: INGEST_TOKEN
+        sync: false          # optional: set to require a token for /ingest
+
+  # --- React (Vite) frontend ---
+  - type: web
+    name: fcc-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false          # set to your fcc-api URL, e.g. https://fcc-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

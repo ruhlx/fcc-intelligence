@@ -41,3 +41,30 @@ export interface ContactFilters {
   country?: string;
   company?: string;
 }
+
+export type LlmProvider = "openai" | "gemini";
+
+export interface IngestRequest {
+  company: string;
+  provider?: LlmProvider;
+  api_key?: string;
+}
+
+export interface IngestReport {
+  applications: number;
+  documents: number;
+  contacts_created: number;
+  contacts_merged: number;
+  errors: string[];
+}
+
+export type JobStatus = "pending" | "running" | "completed" | "failed";
+
+export interface IngestJob {
+  id: string;
+  company: string;
+  status: JobStatus;
+  created_at: string;
+  report: IngestReport | null;
+  error: string | null;
+}

@@ -29,7 +29,7 @@ class GeminiContactExtractor:
 
     def _get_client(self) -> object:
         if self._client is None:
-            from google import genai
+            from google import genai  # type: ignore[attr-defined]
 
             self._client = genai.Client(api_key=self._settings.gemini_api_key)
         return self._client

@@ -49,6 +49,37 @@ docker/         Dockerfile (backend)
 tests/          pytest suite
 ```
 
+## One-click deploy (Render)
+
+The repo ships a [`render.yaml`](render.yaml) Blueprint that provisions the whole
+stack — managed Postgres, the FastAPI API (with `alembic upgrade head` run
+automatically before each deploy), and the static frontend.
+
+1. In Render: **New → Blueprint** and select this repo.
+2. When prompted, provide the secrets marked `sync: false`: your `GEMINI_API_KEY`
+   (or `OPENAI_API_KEY`), and set the frontend's `VITE_API_BASE_URL` to the API
+   service URL (e.g. `https://fcc-api.onrender.com`).
+3. Open the frontend URL, type a company name, paste your LLM key, and click
+   **Run** — no CLI or shell needed.
+
+> Note: `DATABASE_URL` is normalised automatically, so Render's `postgres://`
+> connection string works verbatim (it's rewritten to `postgresql+psycopg://`).
+
+## Run the pipeline from the UI/API (no CLI)
+
+Ingestion can be triggered over HTTP, so the SPA drives it end to end:
+
+```
+POST /ingest        { "company": "u-blox", "provider": "gemini", "api_key": "…" }
+                    → 202 { "id": "…", "status": "pending" }
+GET  /ingest/{id}   → { "status": "completed", "report": { … } }
+```
+
+Jobs run in the background; the UI polls `/ingest/{id}` and refreshes the table
+when done. `api_key`/`provider` are optional per-request overrides — omit them to
+use the server's env config. Set `INGEST_TOKEN` to require an `X-Ingest-Token`
+header on `/ingest`.
+
 ## Quick start (Docker)
 
 ```bash
@@ -146,6 +177,8 @@ GEMINI_API_KEY=your-gemini-key-here
 | `GET /filings`                    | List filings (`?company_id=`)        |
 | `GET /search?q=cyber`             | Free-text search over contacts       |
 | `GET /export/contacts.csv`        | CSV export (Stage 8)                 |
+| `POST /ingest`                    | Trigger a pipeline run for a company |
+| `GET /ingest/{id}`                | Poll ingestion job status/report     |
 
 ## Priority scoring (Stage 9)
 

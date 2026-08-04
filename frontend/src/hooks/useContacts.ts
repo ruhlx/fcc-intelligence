@@ -9,15 +9,18 @@ interface ContactsState {
   error: string | null;
 }
 
-/** Fetches contacts whenever the (already-debounced) filters change. */
-export function useContacts(filters: ContactFilters): ContactsState {
+/**
+ * Fetches contacts whenever the (already-debounced) filters change, or when
+ * ``refreshToken`` is bumped (e.g. after an ingestion run completes).
+ */
+export function useContacts(filters: ContactFilters, refreshToken = 0): ContactsState {
   const [state, setState] = useState<ContactsState>({
     contacts: [],
     loading: true,
     error: null,
   });
 
-  const key = JSON.stringify(filters);
+  const key = `${JSON.stringify(filters)}::${refreshToken}`;
 
   useEffect(() => {
     let cancelled = false;

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
-from app.api.routes import companies, contacts, filings, search
+from app.api.routes import companies, contacts, filings, ingest, search
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
 
@@ -25,7 +26,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
 
@@ -33,6 +34,12 @@ def create_app() -> FastAPI:
     app.include_router(contacts.router)
     app.include_router(filings.router)
     app.include_router(search.router)
+    app.include_router(ingest.router)
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        """Send the bare URL to the interactive API docs."""
+        return RedirectResponse(url="/docs")
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

@@ -89,6 +89,109 @@ body {
   color: var(--text);
 }
 
+/* Ingest panel ------------------------------------------------------------ */
+.ingest {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+.ingest__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.ingest__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 0 1 180px;
+}
+.ingest__field--grow {
+  flex: 1 1 220px;
+}
+.ingest__field label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ingest__field input,
+.ingest__field select {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.ingest__field input:focus,
+.ingest__field select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+.ingest__run {
+  flex: 0 0 auto;
+  height: 38px;
+}
+.ingest__run:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ingest__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ingest__remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.ingest__status {
+  font-size: 0.84rem;
+}
+.ingest__status--hint {
+  color: var(--muted);
+}
+.ingest__status--ok {
+  color: #027a48;
+  font-weight: 600;
+}
+.ingest__status--err {
+  color: #b42318;
+  font-weight: 600;
+}
+.ingest__status--run {
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Stats ------------------------------------------------------------------- */
 .stats {
   display: grid;

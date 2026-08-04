@@ -4,6 +4,7 @@ import { api } from "./api/client";
 import type { ContactFilters } from "./api/types";
 import { ContactsTable } from "./components/ContactsTable";
 import { Filters } from "./components/Filters";
+import { IngestPanel } from "./components/IngestPanel";
 import { useContacts, useDebounced } from "./hooks/useContacts";
 import { useStats } from "./hooks/useStats";
 
@@ -11,10 +12,13 @@ const EMPTY: ContactFilters = { q: "", title: "", country: "", company: "" };
 
 export default function App() {
   const [filters, setFilters] = useState<ContactFilters>(EMPTY);
+  const [refreshKey, setRefreshKey] = useState(0);
   const debounced = useDebounced(filters, 300);
 
-  const { contacts, loading, error } = useContacts(debounced);
-  const stats = useStats(0);
+  const { contacts, loading, error } = useContacts(debounced, refreshKey);
+  const stats = useStats(refreshKey);
+
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   const avgPriority = useMemo(() => {
     if (contacts.length === 0) return 0;
@@ -33,6 +37,8 @@ export default function App() {
           ↓ Export CSV
         </a>
       </header>
+
+      <IngestPanel onCompleted={refresh} />
 
       <section className="stats">
         <StatTile label="Contacts shown" value={loading ? "…" : contacts.length} />
