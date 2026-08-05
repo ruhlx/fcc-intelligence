@@ -1,6 +1,8 @@
-"""Tests for the pure FCC HTML parsers."""
+"""Tests for the FCC HTML parsers, against real captured EAS pages."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from app.crawler.parsing import (
     classify_document,
@@ -9,71 +11,45 @@ from app.crawler.parsing import (
 )
 from app.models.enums import DocumentType
 
-SEARCH_HTML = """
-<html><body>
-<table>
-  <tr><th>Grantee</th><th>Product</th><th>Applicant</th><th>Product</th><th>Date</th></tr>
-  <tr>
-    <td>XPY</td><td>NORA-1</td>
-    <td>u-blox AG</td><td>GNSS Module</td><td>01/15/2025</td>
-    <td><a href="GenericSearchResult.cfm?application_id=1234&fcc_id=XPYNORA-1">detail</a></td>
-  </tr>
-  <tr>
-    <td>XPY</td><td>SARA-2</td>
-    <td>u-blox AG</td><td>Cellular Module</td><td>03/02/2024</td>
-    <td><a href="GenericSearchResult.cfm?application_id=5678&fcc_id=XPYSARA-2">detail</a></td>
-  </tr>
-</table>
-</body></html>
-"""
+FIXTURES = Path(__file__).parent / "fixtures"
+SEARCH_HTML = (FIXTURES / "fcc_search_result.html").read_text()
+EXHIBIT_HTML = (FIXTURES / "fcc_exhibit_report.html").read_text()
 
-EXHIBIT_HTML = """
-<html><body>
-<table>
-  <tr><td>Cover Letter</td>
-      <td><a href="GetApplicationAttachment.html?id=111">Download</a></td></tr>
-  <tr><td>Authorization Letter (POA)</td>
-      <td><a href="GetApplicationAttachment.html?id=222">Download</a></td></tr>
-  <tr><td>Confidentiality Request Long Term</td>
-      <td><a href="GetApplicationAttachment.html?id=333">Download</a></td></tr>
-  <tr><td>Internal Photos</td>
-      <td><a href="https://example.com/notapdf.jpg">image</a></td></tr>
-</table>
-</body></html>
-"""
+SEARCH_BASE = "https://apps.fcc.gov/oetcf/eas/reports/GenericSearchResult.cfm"
+EXHIBIT_BASE = "https://apps.fcc.gov/oetcf/eas/reports/ViewExhibitReport.cfm"
 
 
-def test_parse_search_results() -> None:
-    rows = parse_search_results(SEARCH_HTML, base_url="https://apps.fcc.gov/x/Search.cfm")
-    assert len(rows) == 2
-    first = rows[0]
-    assert first.fcc_id == "XPYNORA-1"
-    assert first.application_id == "1234"
-    assert first.grantee_name == "u-blox AG"
-    assert first.filing_date is not None
-    assert first.filing_date.year == 2025
-    assert first.detail_url is not None and "application_id=1234" in first.detail_url
+def test_parse_search_results_extracts_filings() -> None:
+    rows = parse_search_results(SEARCH_HTML, base_url=SEARCH_BASE)
+    assert len(rows) >= 5
+    by_id = {r.fcc_id: r for r in rows}
+    assert "XPYEMMYW163" in by_id
+    row = by_id["XPYEMMYW163"]
+    assert row.grantee_name == "u-blox AG"
+    assert row.country == "Switzerland"
+    assert row.city == "Thalwil"
+    assert row.filing_date is not None and row.filing_date.year == 2017
+    # detail_url is the Display-Exhibits page and carries the application id.
+    assert row.detail_url is not None and "ViewExhibitReport" in row.detail_url
+    assert row.application_id
 
 
-def test_parse_search_results_dedupes() -> None:
-    doubled = SEARCH_HTML + SEARCH_HTML
-    rows = parse_search_results(doubled, base_url="https://apps.fcc.gov/x/Search.cfm")
-    assert len(rows) == 2
+def test_parse_search_results_dedupes_by_fcc_id() -> None:
+    rows = parse_search_results(SEARCH_HTML, base_url=SEARCH_BASE)
+    ids = [r.fcc_id for r in rows]
+    assert len(ids) == len(set(ids))
 
 
-def test_parse_exhibit_list_filters_non_pdf() -> None:
-    exhibits = parse_exhibit_list(EXHIBIT_HTML, base_url="https://apps.fcc.gov/x/View.cfm")
-    urls = [e.pdf_url for e in exhibits]
-    assert len(exhibits) == 3  # the .jpg row is excluded
-    assert all("GetApplicationAttachment" in u for u in urls)
+def test_parse_search_results_empty() -> None:
+    assert parse_search_results("<html><body>no results</body></html>", base_url=SEARCH_BASE) == []
 
 
-def test_parse_exhibit_list_classifies() -> None:
-    exhibits = parse_exhibit_list(EXHIBIT_HTML, base_url="https://apps.fcc.gov/x/View.cfm")
-    types = {e.doc_type for e in exhibits}
-    assert DocumentType.COVER_LETTER in types
-    assert DocumentType.AUTHORIZATION_LETTER in types
-    assert DocumentType.CONFIDENTIALITY_REQUEST in types
+def test_parse_exhibit_list_finds_attachments() -> None:
+    exhibits = parse_exhibit_list(EXHIBIT_HTML, base_url=EXHIBIT_BASE)
+    assert len(exhibits) >= 3
+    assert all("GetApplicationAttachment" in e.pdf_url for e in exhibits)
+    # At least one recognisable regulatory doc type was classified.
+    assert any(e.doc_type != DocumentType.OTHER for e in exhibits)
 
 
 def test_classify_document() -> None:
@@ -81,4 +57,4 @@ def test_classify_document() -> None:
     assert classify_document("Letter of Authorization") == DocumentType.AUTHORIZATION_LETTER
     assert classify_document("Confidentiality Request") == DocumentType.CONFIDENTIALITY_REQUEST
     assert classify_document("SAR Attestation Statement") == DocumentType.ATTESTATION
-    assert classify_document("Test Report") == DocumentType.OTHER
+    assert classify_document("Internal Photos") == DocumentType.OTHER

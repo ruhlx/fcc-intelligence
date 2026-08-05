@@ -29,6 +29,10 @@ COPY scripts ./scripts
 
 RUN poetry install --only-root
 
+# Install the Firefox browser (+ system deps) used by the crawler to get past
+# FCC's Akamai bot protection. Needs ~1GB RAM at runtime — not the free tier.
+RUN playwright install --with-deps firefox
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -9,9 +9,10 @@ so the rest of the platform needs no changes to consume them.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from app.crawler.fcc_client import FccClient
+from app.crawler.browser_fetcher import FccFetcher
 from app.crawler.parsing import ApplicationRow, ExhibitRow
 from app.models.enums import DocumentType
 
@@ -37,13 +38,13 @@ class FccAdapter:
 
     name = "fcc"
 
-    def __init__(self, client: FccClient) -> None:
+    def __init__(self, fetcher: FccFetcher, *, pdf_directory: Path) -> None:
         # Imported here to avoid a circular import at module load time.
         from app.crawler.company_lookup import CompanyLookup
         from app.crawler.document_locator import DocumentLocator
 
-        self._lookup = CompanyLookup(client)
-        self._locator = DocumentLocator(client, pdf_directory=client._settings.pdf_directory)
+        self._lookup = CompanyLookup(fetcher)
+        self._locator = DocumentLocator(fetcher, pdf_directory=pdf_directory)
 
     async def find_applications(self, company_name: str) -> list[ApplicationRow]:
         return await self._lookup.find_applications(company_name)

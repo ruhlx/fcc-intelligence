@@ -222,8 +222,35 @@ corresponding `DocumentType` values already exist.
 
 ## Notes on the FCC data source
 
-The FCC Equipment Authorization System (EAS) exposes only an HTML interface.
-The crawler parses those pages defensively; selectors live in
-`app/crawler/parsing.py` and are covered by fixture-based tests so they can be
-adjusted quickly if the site markup changes. Please respect the FCC's terms of
-use and rate limits when crawling.
+The FCC Equipment Authorization System (EAS) sits behind **Akamai Bot Manager**,
+which blocks plain HTTP clients (403/503) — even with a spoofed TLS fingerprint —
+because it requires a browser to run its JavaScript sensor. The crawler
+therefore drives a headless **Firefox** via Playwright
+([`app/crawler/browser_fetcher.py`](app/crawler/browser_fetcher.py)); Firefox
+passes where headless Chrome is detected. Attachment downloads must send the
+exhibit page as `Referer` or FCC returns 403.
+
+Install the browser once:
+
+```bash
+poetry run playwright install firefox
+```
+
+HTML parsing is isolated in `app/crawler/parsing.py` and covered by tests
+against **real captured EAS pages** (`tests/fixtures/`), so selectors can be
+adjusted quickly if the markup changes. `FCC_MAX_FILINGS` (default 10) bounds how
+many filings are processed per company. Please respect the FCC's terms of use
+and rate limits.
+
+### Where ingestion runs
+
+The headless browser needs ~1 GB RAM, so ingestion (the crawl) is best run
+**locally** or on a host with enough memory — not on a 512 MB free-tier web
+service. Point it at your deployed database and it populates the cloud DB, which
+the deployed API/frontend then serve:
+
+```bash
+DATABASE_URL='postgresql+psycopg://…(your Render Postgres)…' \
+LLM_PROVIDER=gemini GEMINI_API_KEY=your-key \
+poetry run python -m scripts.run_pipeline u-blox
+```

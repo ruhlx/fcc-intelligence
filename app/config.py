@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     http_timeout: float = Field(default=30.0)
     http_max_retries: int = Field(default=3)
     crawl_concurrency: int = Field(default=4)
+    # Cap filings processed per company (results are paginated 10/page; this
+    # bounds crawl time, PDF downloads and LLM cost).
+    fcc_max_filings: int = Field(default=10)
 
     @property
     def pdf_directory(self) -> Path:

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
-from app.crawler import ApplicationRow, CompanyLookup, DocumentLocator, FccClient
+from app.crawler import ApplicationRow, CompanyLookup, DocumentLocator, FccFetcher
 from app.db.repositories import (
     CompanyRepository,
     DocumentRepository,
@@ -46,16 +46,16 @@ class IngestionPipeline:
         self,
         session: Session,
         *,
-        client: FccClient,
+        fetcher: FccFetcher,
         extractor: ContactExtractor,
         settings: Settings | None = None,
     ) -> None:
         self._session = session
         self._settings = settings or get_settings()
-        self._client = client
+        self._fetcher = fetcher
         self._extractor = extractor
-        self._lookup = CompanyLookup(client)
-        self._locator = DocumentLocator(client, pdf_directory=self._settings.pdf_directory)
+        self._lookup = CompanyLookup(fetcher)
+        self._locator = DocumentLocator(fetcher, pdf_directory=self._settings.pdf_directory)
         self._companies = CompanyRepository(session)
         self._filings = FilingRepository(session)
         self._documents = DocumentRepository(session)
@@ -67,17 +67,27 @@ class IngestionPipeline:
         company = self._companies.get_or_create(company_name)
         self._session.flush()
 
-        applications = await self._lookup.find_applications(company_name)
-        report.applications = len(applications)
+        try:
+            applications = await self._lookup.find_applications(company_name)
+            # Bound the crawl (results are paginated; avoid runaway cost).
+            applications = applications[: self._settings.fcc_max_filings]
+            report.applications = len(applications)
 
-        for app in applications:
-            try:
-                await self._process_application(company.id, app, report)
-            except Exception as exc:  # broad: isolate per-application failures
-                logger.error("application_failed", fcc_id=app.fcc_id, error=str(exc))
-                report.errors.append(f"{app.fcc_id}: {exc}")
+            # Backfill the company's country from the first filing's applicant row.
+            if applications and applications[0].country and not company.country:
+                company.country = applications[0].country
 
-        self._session.commit()
+            for app in applications:
+                try:
+                    await self._process_application(company.id, app, report)
+                except Exception as exc:  # broad: isolate per-application failures
+                    logger.error("application_failed", fcc_id=app.fcc_id, error=str(exc))
+                    report.errors.append(f"{app.fcc_id}: {exc}")
+
+            self._session.commit()
+        finally:
+            await self._fetcher.aclose()
+
         logger.info(
             "pipeline_done",
             company=company_name,
@@ -98,12 +108,19 @@ class IngestionPipeline:
         )
         exhibits = await self._locator.list_exhibits(app)
         for exhibit in exhibits:
-            await self._process_exhibit(company_id, filing, exhibit, report)
+            await self._process_exhibit(company_id, filing, exhibit, report, app.detail_url)
 
     async def _process_exhibit(
-        self, company_id: int, filing: Filing, exhibit: object, report: PipelineReport
+        self,
+        company_id: int,
+        filing: Filing,
+        exhibit: object,
+        report: PipelineReport,
+        referer: str | None,
     ) -> None:
-        downloaded = await self._locator.download_exhibit(filing.fcc_id, exhibit)  # type: ignore[arg-type]
+        downloaded = await self._locator.download_exhibit(
+            filing.fcc_id, exhibit, referer=referer  # type: ignore[arg-type]
+        )
         document = self._documents.get_or_create(
             filing_id=filing.id,
             pdf_url=downloaded.exhibit.pdf_url,

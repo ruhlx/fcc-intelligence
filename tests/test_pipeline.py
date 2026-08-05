@@ -17,11 +17,16 @@ from app.models import Company, Contact
 from app.parser.pdf_extractor import ExtractionResult
 from app.services.pipeline import IngestionPipeline
 
+# Mirrors the real result page: one filing anchored on a Display-Exhibits link,
+# with the applicant/country/date columns around the FCC-ID cell.
 SEARCH_HTML = """
 <table>
   <tr>
-    <td>XPY</td><td>NORA-1</td><td>u-blox AG</td><td>GNSS Module</td><td>01/15/2025</td>
-    <td><a href="GenericSearchResult.cfm?application_id=1&fcc_id=XPYNORA-1">d</a></td>
+    <td></td>
+    <td><a href="ViewExhibitReport.cfm?mode=Exhibits&application_id=1&fcc_id=XPYNORA-1">Ex</a></td>
+    <td>Detail</td><td></td><td></td>
+    <td>u-blox AG</td><td></td><td>Thalwil</td><td>N/A</td><td>Switzerland</td><td>CH-8800</td>
+    <td>XPYNORA-1</td><td>Original Equipment</td><td>01/15/2025</td>
   </tr>
 </table>
 """
@@ -34,24 +39,24 @@ EXHIBIT_HTML = """
 """
 
 
-class FakeClient:
+class FakeFetcher:
     def __init__(self, base_url: str = "https://apps.fcc.gov/oetcf/eas/reports") -> None:
         self.base_url = base_url
         self.downloads: list[str] = []
+        self.closed = False
 
-    async def get_html(self, url: str, *, params: dict | None = None) -> str:
-        if "GenericSearchResult" in url:
-            return SEARCH_HTML
-        if "ViewExhibitReport" in url:
-            return EXHIBIT_HTML
-        return ""
+    async def search(self, company: str) -> str:
+        return SEARCH_HTML
 
-    async def download(self, url: str) -> bytes:
+    async def get_html(self, url: str) -> str:
+        return EXHIBIT_HTML
+
+    async def download(self, url: str, *, referer: str | None = None) -> bytes:
         self.downloads.append(url)
         return b"%PDF-fake-bytes"
 
-    async def aclose(self) -> None:  # pragma: no cover - not used here
-        return None
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 class FakeExtractor:
@@ -88,9 +93,10 @@ async def test_pipeline_run_end_to_end(session: Session, settings: Settings) -> 
 
     pipeline_module.extract_text = _fake_extract  # type: ignore[assignment]
 
+    fetcher = FakeFetcher()
     pipeline = IngestionPipeline(
         session,
-        client=FakeClient(),  # type: ignore[arg-type]
+        fetcher=fetcher,  # type: ignore[arg-type]
         extractor=FakeExtractor(),
         settings=settings,
     )
@@ -100,6 +106,7 @@ async def test_pipeline_run_end_to_end(session: Session, settings: Settings) -> 
     assert report.documents == 1
     assert report.contacts_created == 1  # the external lawyer is dropped
     assert report.errors == []
+    assert fetcher.closed  # pipeline releases the fetcher when done
 
     company = session.query(Company).filter_by(name="u-blox").one()
     contacts = session.query(Contact).filter_by(company_id=company.id).all()
