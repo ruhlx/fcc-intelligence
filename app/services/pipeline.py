@@ -13,15 +13,18 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.crawler import ApplicationRow, CompanyLookup, DocumentLocator, FccFetcher
+from app.crawler.parsing import parse_application_form
 from app.db.repositories import (
     CompanyRepository,
     DocumentRepository,
     FilingRepository,
 )
 from app.extractor import ContactExtractor
+from app.extractor.schemas import ExtractedContact
 from app.logging_config import get_logger
 from app.models import Filing
-from app.parser import extract_text
+from app.models.enums import DocumentType
+from app.parser import extract_text, html_to_text
 from app.services.contact_service import ContactIngestionService
 
 logger = get_logger(__name__)
@@ -106,9 +109,47 @@ class IngestionPipeline:
             filing_date=app.filing_date,
             filing_url=app.detail_url,
         )
+        # The 731 "View Form" page holds the structured Responsible Party
+        # contact (name/title/email/phone) — process it first, it's the best lead.
+        if app.form_url:
+            await self._process_form(company_id, filing, app.form_url, report)
+
         exhibits = await self._locator.list_exhibits(app)
         for exhibit in exhibits:
             await self._process_exhibit(company_id, filing, exhibit, report, app.detail_url)
+
+    async def _process_form(
+        self, company_id: int, filing: Filing, form_url: str, report: PipelineReport
+    ) -> None:
+        """Parse the 731 form's Responsible Party structurally (no LLM needed)."""
+        html = await self._fetcher.get_html(form_url)
+        document = self._documents.get_or_create(
+            filing_id=filing.id, pdf_url=form_url, doc_type=DocumentType.OTHER
+        )
+        document.parsed_text = html_to_text(html)
+        report.documents += 1
+
+        extracted = [
+            ExtractedContact(
+                full_name=fc.full_name,
+                email=fc.email,
+                phone=fc.phone,
+                title=fc.title,
+                is_internal_employee=True,
+                confidence=85,
+            )
+            for fc in parse_application_form(html)
+        ]
+        if not extracted:
+            return
+        summary = self._ingestion.ingest(
+            company_id=company_id,
+            filing=filing,
+            extracted=extracted,
+            source_document=form_url,
+        )
+        report.contacts_created += summary.created
+        report.contacts_merged += summary.merged
 
     async def _process_exhibit(
         self,
@@ -135,16 +176,34 @@ class IngestionPipeline:
             logger.warning("no_text_extracted", fcc_id=filing.fcc_id)
             return
 
+        self._extract_and_ingest(
+            company_id,
+            filing,
+            extraction.text,
+            downloaded.exhibit.doc_type.value,
+            downloaded.exhibit.pdf_url,
+            report,
+        )
+
+    def _extract_and_ingest(
+        self,
+        company_id: int,
+        filing: Filing,
+        text: str,
+        doc_type_label: str,
+        source: str,
+        report: PipelineReport,
+    ) -> None:
         response = self._extractor.extract(
-            document_text=extraction.text,
-            document_type=downloaded.exhibit.doc_type.value,
+            document_text=text,
+            document_type=doc_type_label,
             company=filing.company.name if filing.company else None,
         )
         summary = self._ingestion.ingest(
             company_id=company_id,
             filing=filing,
             extracted=response.contacts,
-            source_document=downloaded.exhibit.pdf_url,
+            source_document=source,
         )
         report.contacts_created += summary.created
         report.contacts_merged += summary.merged

@@ -23,6 +23,13 @@ def clean_text(raw: str) -> str:
     return "\n".join(lines).strip()
 
 
+def html_to_text(html: str) -> str:
+    """Extract clean, human-readable text from an HTML page."""
+    from bs4 import BeautifulSoup
+
+    return clean_text(BeautifulSoup(html, "html.parser").get_text(" ", strip=True))
+
+
 def word_count(text: str) -> int:
     """Return the number of alphabetic words (length >= 2) in ``text``."""
     return len(_WORD_RE.findall(text))

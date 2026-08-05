@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.crawler.parsing import (
     classify_document,
+    parse_application_form,
     parse_exhibit_list,
     parse_search_results,
 )
@@ -14,6 +15,7 @@ from app.models.enums import DocumentType
 FIXTURES = Path(__file__).parent / "fixtures"
 SEARCH_HTML = (FIXTURES / "fcc_search_result.html").read_text()
 EXHIBIT_HTML = (FIXTURES / "fcc_exhibit_report.html").read_text()
+FORM_HTML = (FIXTURES / "fcc_731_form.html").read_text()
 
 SEARCH_BASE = "https://apps.fcc.gov/oetcf/eas/reports/GenericSearchResult.cfm"
 EXHIBIT_BASE = "https://apps.fcc.gov/oetcf/eas/reports/ViewExhibitReport.cfm"
@@ -50,6 +52,20 @@ def test_parse_exhibit_list_finds_attachments() -> None:
     assert all("GetApplicationAttachment" in e.pdf_url for e in exhibits)
     # At least one recognisable regulatory doc type was classified.
     assert any(e.doc_type != DocumentType.OTHER for e in exhibits)
+
+
+def test_parse_application_form_responsible_party() -> None:
+    contacts = parse_application_form(FORM_HTML)
+    assert len(contacts) >= 1
+    filip = next(c for c in contacts if "Kruzela" in c.full_name)
+    assert filip.full_name == "Filip Kruzela"
+    assert filip.title == "Certification Manager"
+    assert filip.email == "filip.kruzela@u-blox.com"
+    assert filip.phone == "+46733207170"
+
+
+def test_parse_application_form_empty() -> None:
+    assert parse_application_form("<html><body>no table</body></html>") == []
 
 
 def test_classify_document() -> None:

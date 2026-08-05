@@ -34,6 +34,9 @@ class ApplicationRow:
     detail_url: str | None
     country: str | None = None
     city: str | None = None
+    # The "View Form" (731) page carries the structured Responsible Party
+    # contact (name, title, email, phone) — often the best lead per filing.
+    form_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,9 @@ def parse_search_results(html: str, *, base_url: str) -> list[ApplicationRow]:
         )
         applicant, city, country, filing_date = _row_fields(values, fcc_id)
 
+        form_link = row.find("a", href=lambda h: h and "GetTcb731Report.do" in h) if row else None
+        form_url = urljoin(base_url, str(form_link["href"])) if form_link else None
+
         rows.append(
             ApplicationRow(
                 fcc_id=fcc_id,
@@ -121,6 +127,7 @@ def parse_search_results(html: str, *, base_url: str) -> list[ApplicationRow]:
                 detail_url=urljoin(base_url, href),
                 country=country,
                 city=city,
+                form_url=form_url,
             )
         )
     return rows
@@ -144,6 +151,61 @@ def _row_fields(
     country = values[i - 2] if i - 2 >= 0 else None
     filing_date = _parse_date(values[i + 2]) if i + 2 < len(values) else None
     return applicant, city, country, filing_date
+
+
+@dataclass(frozen=True)
+class FormContact:
+    """A contact parsed structurally from a 731 application form."""
+
+    full_name: str
+    title: str | None
+    email: str | None
+    phone: str | None
+
+
+def parse_application_form(html: str) -> list[FormContact]:
+    """Extract the Responsible Party contact(s) from a 731 "View Form" page.
+
+    The form is a label/value table. Empty ``Contact`` sections have blank
+    values, so each block with a non-empty ``Last Name`` is a real person; we
+    read the adjacent First Name / Title / Email / Telephone fields (skipping
+    blanks) around that anchor.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    pairs: list[tuple[str, str]] = []
+    for tr in soup.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 2:
+            continue
+        label = cells[0].get_text(" ", strip=True)
+        if label.endswith(":"):
+            pairs.append((label.rstrip(":").strip().lower(), cells[1].get_text(" ", strip=True)))
+
+    contacts: list[FormContact] = []
+    seen: set[str] = set()
+    for i, (label, value) in enumerate(pairs):
+        if label != "last name" or not value:
+            continue
+        window = pairs[max(0, i - 4) : i + 8]
+
+        def _find(names: set[str], win: list[tuple[str, str]] = window) -> str | None:
+            return next((v for k, v in win if k in names and v), None)
+
+        first = _find({"first name"})
+        full_name = f"{first} {value}".strip() if first else value
+        key = full_name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        contacts.append(
+            FormContact(
+                full_name=full_name,
+                title=_find({"title"}),
+                email=_find({"email", "e-mail"}),
+                phone=_find({"telephone number", "telephone"}),
+            )
+        )
+    return contacts
 
 
 def parse_exhibit_list(html: str, *, base_url: str) -> list[ExhibitRow]:
