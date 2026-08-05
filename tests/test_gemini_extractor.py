@@ -12,7 +12,7 @@ from app.extractor import (
     OpenAIContactExtractor,
     build_extractor,
 )
-from app.extractor.schemas import ExtractedContact, ExtractionResponse
+from app.extractor.schemas import GeminiContact, GeminiExtractionResponse
 
 
 class _FakeModels:
@@ -37,23 +37,49 @@ def _client(response: object, *, raise_exc: Exception | None = None) -> _FakeCli
     return _FakeClient(_FakeModels(response, raise_exc=raise_exc))
 
 
-def test_gemini_extract_uses_parsed_object() -> None:
-    parsed = ExtractionResponse(
-        contacts=[ExtractedContact(full_name="Jane Doe", email="JANE@x.com", confidence=80)]
+def _gemini_contact(**kw: object) -> GeminiContact:
+    base: dict[str, object] = dict(
+        full_name="Jane Doe", email="JANE@x.com", phone=None, title="Certification Manager",
+        company="x", document_type="COVER", is_internal_employee=True, confidence=80,
     )
+    base.update(kw)
+    return GeminiContact(**base)  # type: ignore[arg-type]
+
+
+def test_gemini_extract_uses_parsed_object() -> None:
+    parsed = GeminiExtractionResponse(contacts=[_gemini_contact()])
     client = _client(SimpleNamespace(parsed=parsed, text=None))
     extractor = GeminiContactExtractor(client=client)
 
     result = extractor.extract(document_text="text mentioning Jane", document_type="COVER")
-    assert result.contacts[0].email == "jane@x.com"
-    # Verify the request carried the JSON schema config.
+    assert result.contacts[0].email == "jane@x.com"  # normalised to lowercase
+    # Verify the request carried the no-default Gemini schema.
     cfg = client.models.calls[0]["config"]
-    assert cfg["response_schema"] is ExtractionResponse
+    assert cfg["response_schema"] is GeminiExtractionResponse
     assert cfg["response_mime_type"] == "application/json"
 
 
+def test_gemini_response_schema_has_no_defaults() -> None:
+    """Regression guard: Gemini rejects any schema containing `default`."""
+
+    def _no_default(node: object) -> bool:
+        if isinstance(node, dict):
+            if "default" in node:
+                return False
+            return all(_no_default(v) for v in node.values())
+        if isinstance(node, list):
+            return all(_no_default(v) for v in node)
+        return True
+
+    assert _no_default(GeminiExtractionResponse.model_json_schema())
+
+
 def test_gemini_falls_back_to_text_json() -> None:
-    payload = '{"contacts": [{"full_name": "Bob", "confidence": 40}]}'
+    payload = (
+        '{"contacts": [{"full_name": "Bob", "email": null, "phone": null, '
+        '"title": "QA", "company": "x", "document_type": "COVER", '
+        '"is_internal_employee": true, "confidence": 40}]}'
+    )
     client = _client(SimpleNamespace(parsed=None, text=payload))
     extractor = GeminiContactExtractor(client=client)
     result = extractor.extract(document_text="text mentioning Bob")

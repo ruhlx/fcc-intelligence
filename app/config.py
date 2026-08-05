@@ -31,7 +31,8 @@ class Settings(BaseSettings):
 
     # Google Gemini
     gemini_api_key: str = Field(default="", description="Google Gemini API key.")
-    gemini_model: str = Field(default="gemini-2.5-flash")
+    # `-latest` alias tracks the current flash model (avoids deprecation 404s).
+    gemini_model: str = Field(default="gemini-flash-latest")
 
     # Database
     database_url: str = Field(

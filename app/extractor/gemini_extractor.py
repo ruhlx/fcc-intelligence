@@ -13,7 +13,7 @@ referenced at call time.
 from __future__ import annotations
 
 from app.config import Settings, get_settings
-from app.extractor.schemas import ExtractionResponse
+from app.extractor.schemas import ExtractionResponse, GeminiExtractionResponse
 from app.logging_config import get_logger
 from app.prompts.extraction import SYSTEM_PROMPT, build_user_prompt
 
@@ -58,7 +58,8 @@ class GeminiContactExtractor:
                 config={
                     "system_instruction": SYSTEM_PROMPT,
                     "response_mime_type": "application/json",
-                    "response_schema": ExtractionResponse,
+                    # No-default schema — Gemini rejects `default` in schemas.
+                    "response_schema": GeminiExtractionResponse,
                     "temperature": 0.0,
                 },
             )
@@ -80,14 +81,15 @@ class GeminiContactExtractor:
         """Turn a Gemini response into an :class:`ExtractionResponse`.
 
         Prefers the SDK's already-parsed object, falling back to the raw JSON
-        ``text`` payload.
+        ``text`` payload, then converts the no-default Gemini schema to the
+        provider-neutral schema.
         """
         parsed = getattr(response, "parsed", None)
-        if isinstance(parsed, ExtractionResponse):
-            return parsed
+        if isinstance(parsed, GeminiExtractionResponse):
+            return parsed.to_standard()
         if parsed is not None:
-            return ExtractionResponse.model_validate(parsed)
+            return GeminiExtractionResponse.model_validate(parsed).to_standard()
         text = getattr(response, "text", None)
         if text:
-            return ExtractionResponse.model_validate_json(text)
+            return GeminiExtractionResponse.model_validate_json(text).to_standard()
         return ExtractionResponse(contacts=[])

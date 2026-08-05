@@ -43,3 +43,46 @@ class ExtractionResponse(BaseModel):
     """Top-level JSON object the model returns."""
 
     contacts: list[ExtractedContact] = Field(default_factory=list)
+
+
+class GeminiContact(BaseModel):
+    """Gemini variant of :class:`ExtractedContact` with **no default values**.
+
+    Gemini's ``response_schema`` rejects any JSON schema that contains a
+    ``default`` (OpenAI accepts them). Every field is therefore required
+    (nullable where optional), and the result is converted back to the standard
+    :class:`ExtractedContact` afterwards.
+    """
+
+    full_name: str
+    email: str | None
+    phone: str | None
+    title: str | None
+    company: str | None
+    document_type: str | None
+    is_internal_employee: bool
+    confidence: int
+
+
+class GeminiExtractionResponse(BaseModel):
+    """Gemini-schema-safe top-level object (no defaults)."""
+
+    contacts: list[GeminiContact]
+
+    def to_standard(self) -> ExtractionResponse:
+        """Convert to the provider-neutral :class:`ExtractionResponse`."""
+        return ExtractionResponse(
+            contacts=[
+                ExtractedContact(
+                    full_name=c.full_name,
+                    email=c.email,
+                    phone=c.phone,
+                    title=c.title,
+                    company=c.company,
+                    document_type=c.document_type,
+                    is_internal_employee=c.is_internal_employee,
+                    confidence=max(0, min(c.confidence, 100)),
+                )
+                for c in self.contacts
+            ]
+        )
