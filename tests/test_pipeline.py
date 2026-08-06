@@ -56,8 +56,10 @@ class FakeFetcher:
         self.base_url = base_url
         self.downloads: list[str] = []
         self.closed = False
+        self.show_records = 0
 
-    async def search(self, company: str) -> str:
+    async def search(self, company: str, *, show_records: int = 10) -> str:
+        self.show_records = show_records
         return SEARCH_HTML
 
     async def get_html(self, url: str) -> str:
@@ -107,6 +109,7 @@ async def test_default_mode_form_only(session: Session, settings: Settings) -> N
 
     assert report.applications == 1
     assert report.contacts_created == 1  # Jane Doe from the form
+    assert fetcher.show_records == 1000  # structured mode pulls all filings
     assert fetcher.downloads == []  # no exhibit PDFs downloaded
     company = session.query(Company).filter_by(name="u-blox").one()
     contact = session.query(Contact).filter_by(company_id=company.id).one()
@@ -128,6 +131,7 @@ async def test_deep_mode_extracts_pdfs(session: Session, settings: Settings) -> 
     )
     await pipeline.run("u-blox")
 
+    assert fetcher.show_records == 10  # deep mode stays capped
     assert fetcher.downloads  # exhibit PDF was fetched
     names = {c.full_name for c in session.query(Contact).all()}
     assert "Jane Doe" in names  # from the form

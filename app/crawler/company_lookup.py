@@ -15,14 +15,18 @@ class CompanyLookup:
     def __init__(self, fetcher: FccFetcher) -> None:
         self._fetcher = fetcher
 
-    async def find_applications(self, company_name: str) -> list[ApplicationRow]:
+    async def find_applications(
+        self, company_name: str, *, show_records: int = 10
+    ) -> list[ApplicationRow]:
         """Return every application row EAS lists for ``company_name``.
 
         :param company_name: Applicant/grantee name, e.g. ``"u-blox"``.
+        :param show_records: How many result records to request (page size);
+            large values pull all filings in one page.
         :returns: A list of :class:`ApplicationRow`, deduplicated by FCC ID.
         """
         logger.info("company_lookup_start", company=company_name)
-        html = await self._fetcher.search(company_name)
+        html = await self._fetcher.search(company_name, show_records=show_records)
         rows = parse_search_results(
             html, base_url=f"{self._fetcher.base_url}/GenericSearchResult.cfm"
         )

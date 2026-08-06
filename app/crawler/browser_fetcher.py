@@ -35,7 +35,7 @@ class FccFetcher(Protocol):
 
     base_url: str
 
-    async def search(self, company: str) -> str:
+    async def search(self, company: str, *, show_records: int = 10) -> str:
         """Run the applicant-name search and return the result page HTML."""
         ...
 
@@ -72,7 +72,7 @@ class BrowserFetcher:
         self._ctx = await self._browser.new_context(accept_downloads=True)
         logger.info("browser_started", engine="firefox")
 
-    async def search(self, company: str) -> str:
+    async def search(self, company: str, *, show_records: int = 10) -> str:
         await self._ensure()
         page = await self._ctx.new_page()
         try:
@@ -84,8 +84,25 @@ class BrowserFetcher:
             await page.fill("input[name=applicant_name]", company)
             await page.click(_SUBMIT_SELECTOR)
             await self._settle(page)
+
+            # Enlarge the page via the results form's show_records/FromRec fields
+            # to pull all filings in one request (bounded for safety).
+            capped = max(10, min(show_records, 5000))
+            if capped > 10 and await page.query_selector("input[name=next_value]"):
+                await page.evaluate(
+                    """(n) => {
+                        const sr = document.querySelector('input[name=show_records]');
+                        const fr = document.querySelector('input[name=FromRec]');
+                        if (sr) sr.value = String(n);
+                        if (fr) fr.value = '1';
+                    }""",
+                    capped,
+                )
+                await page.click("input[name=next_value]")
+                await self._settle(page)
+
             html: str = await page.content()
-            logger.info("fcc_search_done", company=company, bytes=len(html))
+            logger.info("fcc_search_done", company=company, rows=capped, bytes=len(html))
             return html
         finally:
             await page.close()

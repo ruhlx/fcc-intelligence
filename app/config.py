@@ -82,9 +82,12 @@ class Settings(BaseSettings):
     http_timeout: float = Field(default=30.0)
     http_max_retries: int = Field(default=3)
     crawl_concurrency: int = Field(default=4)
-    # Cap filings processed per company (results are paginated 10/page; this
-    # bounds crawl time, PDF downloads and LLM cost).
+    # Cap filings processed per company in deep (--pdfs) mode — bounds PDF
+    # downloads and LLM cost.
     fcc_max_filings: int = Field(default=10)
+    # Cap in default (structured, no-LLM) mode. Higher because the 731 form
+    # parse is free and fast — effectively "all filings" for most companies.
+    fcc_max_filings_structured: int = Field(default=1000)
     # When False (default), only structured, freely-available contacts are
     # extracted (the 731 Responsible Party) — no PDF downloads, no LLM. When
     # True, exhibit PDFs are also downloaded and mined with the LLM.

@@ -71,9 +71,17 @@ class IngestionPipeline:
         self._session.flush()
 
         try:
-            applications = await self._lookup.find_applications(company_name)
-            # Bound the crawl (results are paginated; avoid runaway cost).
-            applications = applications[: self._settings.fcc_max_filings]
+            # Default (structured) mode is free, so pull all filings; deep mode
+            # stays capped because each filing means many PDFs + LLM calls.
+            cap = (
+                self._settings.fcc_max_filings
+                if self._settings.extract_pdfs
+                else self._settings.fcc_max_filings_structured
+            )
+            applications = await self._lookup.find_applications(
+                company_name, show_records=cap
+            )
+            applications = applications[:cap]
             report.applications = len(applications)
 
             # Backfill the company's country from the first filing's applicant row.
