@@ -12,3 +12,6 @@ htmlcov/
 dist/
 *.db
 fcc.db
+*.db-shm
+*.db-wal
+fcc.db-*
