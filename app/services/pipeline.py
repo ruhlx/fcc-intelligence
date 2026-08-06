@@ -88,14 +88,17 @@ class IngestionPipeline:
             if applications and applications[0].country and not company.country:
                 company.country = applications[0].country
 
+            self._session.commit()  # persist the company row up front
             for app in applications:
                 try:
                     await self._process_application(company.id, app, report)
+                    # Commit per filing: releases the SQLite write lock often
+                    # (so the API can read concurrently) and saves progress.
+                    self._session.commit()
                 except Exception as exc:  # broad: isolate per-application failures
+                    self._session.rollback()
                     logger.error("application_failed", fcc_id=app.fcc_id, error=str(exc))
                     report.errors.append(f"{app.fcc_id}: {exc}")
-
-            self._session.commit()
         finally:
             await self._fetcher.aclose()
 

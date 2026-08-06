@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+from sqlalchemy import text
+
 import app.db.session as session_module
+from app.db.session import make_engine
 from app.models import Company
+
+
+def test_file_sqlite_uses_wal(tmp_path) -> None:
+    engine = make_engine(f"sqlite:///{tmp_path / 'x.db'}")
+    with engine.connect() as c:
+        assert c.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+        assert c.execute(text("PRAGMA busy_timeout")).scalar() == 15000
 
 
 def test_session_scope_commits(engine, monkeypatch) -> None:
