@@ -7,9 +7,10 @@ import type {
   IngestRequest,
 } from "./types";
 
-const BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
-).replace(/\/$/, "");
+// Default to same-origin ("") so the SPA works when served by the API as a
+// single local process. Set VITE_API_BASE_URL at build time for a split
+// deploy (e.g. GitHub Pages -> a separate API host).
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -54,7 +55,8 @@ async function fetchWithWake(url: string, init?: RequestInit): Promise<Response>
 }
 
 async function getJson<T>(path: string, params?: Record<string, string>): Promise<T> {
-  const url = new URL(`${BASE_URL}${path}`);
+  // window.location.origin as base handles a relative (same-origin) BASE_URL.
+  const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value) url.searchParams.set(key, value);

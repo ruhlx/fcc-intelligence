@@ -110,13 +110,17 @@ class IngestionPipeline:
             filing_url=app.detail_url,
         )
         # The 731 "View Form" page holds the structured Responsible Party
-        # contact (name/title/email/phone) — process it first, it's the best lead.
+        # contact (name/title/email/phone) — always processed, no LLM needed.
         if app.form_url:
             await self._process_form(company_id, filing, app.form_url, report)
 
-        exhibits = await self._locator.list_exhibits(app)
-        for exhibit in exhibits:
-            await self._process_exhibit(company_id, filing, exhibit, report, app.detail_url)
+        # Deep mode (opt-in): also download and LLM-mine the exhibit PDFs.
+        if self._settings.extract_pdfs:
+            exhibits = await self._locator.list_exhibits(app)
+            for exhibit in exhibits:
+                await self._process_exhibit(
+                    company_id, filing, exhibit, report, app.detail_url
+                )
 
     async def _process_form(
         self, company_id: int, filing: Filing, form_url: str, report: PipelineReport

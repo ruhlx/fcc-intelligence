@@ -88,7 +88,8 @@ def test_ingest_token_enforced(monkeypatch) -> None:
     assert ok.status_code == 202
 
 
-def test_root_redirects_to_docs(client: TestClient) -> None:
+def test_root_is_reachable(client: TestClient) -> None:
+    # Root either serves the built SPA (200) or redirects to /docs (307/308),
+    # depending on whether frontend/dist exists in the environment.
     resp = client.get("/", follow_redirects=False)
-    assert resp.status_code in (307, 308)
-    assert resp.headers["location"] == "/docs"
+    assert resp.status_code in (200, 307, 308)

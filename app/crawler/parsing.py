@@ -192,7 +192,13 @@ def parse_application_form(html: str) -> list[FormContact]:
             return next((v for k, v in win if k in names and v), None)
 
         first = _find({"first name"})
-        full_name = f"{first} {value}".strip() if first else value
+        # Some forms put the whole name in "First Name"; avoid "Jake Bascon Bascon".
+        if first and value.lower() in first.lower():
+            full_name = first
+        elif first:
+            full_name = f"{first} {value}".strip()
+        else:
+            full_name = value
         key = full_name.lower()
         if key in seen:
             continue

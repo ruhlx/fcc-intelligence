@@ -10,3 +10,5 @@ data/
 htmlcov/
 .coverage
 dist/
+*.db
+fcc.db

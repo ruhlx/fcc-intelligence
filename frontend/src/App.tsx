@@ -56,7 +56,7 @@ export default function App() {
       <ContactsTable contacts={contacts} loading={loading} error={error} />
 
       <footer className="footer">
-        API: <code>{api.baseUrl}</code>
+        API: <code>{api.baseUrl || "same origin"}</code>
       </footer>
     </div>
   );

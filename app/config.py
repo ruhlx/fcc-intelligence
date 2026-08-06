@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # Cap filings processed per company (results are paginated 10/page; this
     # bounds crawl time, PDF downloads and LLM cost).
     fcc_max_filings: int = Field(default=10)
+    # When False (default), only structured, freely-available contacts are
+    # extracted (the 731 Responsible Party) — no PDF downloads, no LLM. When
+    # True, exhibit PDFs are also downloaded and mined with the LLM.
+    extract_pdfs: bool = Field(default=False)
 
     @property
     def pdf_directory(self) -> Path:

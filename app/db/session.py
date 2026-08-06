@@ -9,14 +9,26 @@ from functools import lru_cache
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.config import Settings, get_settings
 
 
 @lru_cache
 def get_engine() -> Engine:
-    """Return a process-wide SQLAlchemy engine built from settings."""
+    """Return a process-wide SQLAlchemy engine built from settings.
+
+    SQLite (used for fully-local runs) needs cross-thread access for FastAPI's
+    threadpool, so a single shared connection is configured for it.
+    """
     settings: Settings = get_settings()
+    if settings.database_url.startswith("sqlite"):
+        return create_engine(
+            settings.database_url,
+            future=True,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     return create_engine(settings.database_url, pool_pre_ping=True, future=True)
 
 

@@ -49,6 +49,44 @@ docker/         Dockerfile (backend)
 tests/          pytest suite
 ```
 
+## Run everything locally (one process, no cloud)
+
+The whole app can run on your machine against a local **SQLite** file, with the
+API also serving the built frontend — so a single `uvicorn` is the entire app.
+
+```bash
+poetry install && poetry run playwright install firefox
+cp .env.example .env          # defaults to sqlite:///./fcc.db, AUTO_MIGRATE=true
+poetry run alembic upgrade head           # create the local schema
+(cd frontend && npm install && npm run build)   # build the SPA (same-origin)
+```
+
+Collect contacts, then browse them:
+
+```bash
+# Default = structured 731 "Responsible Party" only — fast, no LLM/quota:
+poetry run python -m scripts.run_pipeline u-blox
+
+# Then serve the API + UI together at http://localhost:8000
+poetry run uvicorn app.main:app
+```
+
+Deep mode (also download and LLM-mine exhibit PDFs — needs an LLM key/quota):
+
+```bash
+poetry run python -m scripts.run_pipeline --pdfs u-blox
+```
+
+### Two extraction modes
+
+| Mode | How | Source | LLM |
+| ---- | --- | ------ | --- |
+| **Default** | `run_pipeline <company>` | 731 form Responsible Party (name/title/email/phone), parsed structurally | none |
+| **Deep** | `run_pipeline --pdfs <company>` or `EXTRACT_PDFS=true` | above **+** exhibit PDFs (cover letters, attestations…) | yes |
+
+The default mode is unaffected by LLM rate limits; deep mode is bounded by your
+provider's quota (e.g. Gemini's free tier is ~20 requests/day).
+
 ## One-click deploy (Render)
 
 The repo ships a [`render.yaml`](render.yaml) Blueprint that provisions the whole

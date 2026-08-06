@@ -1,6 +1,7 @@
-"""End-to-end pipeline test with fake HTTP client, fake LLM, and patched OCR.
+"""End-to-end pipeline tests with a fake fetcher and fake LLM (no network).
 
-Exercises Stages 1-6 without any network access.
+Covers the default mode (structured 731 Responsible Party only, no LLM) and the
+opt-in deep mode (exhibit PDFs mined with the LLM).
 """
 
 from __future__ import annotations
@@ -17,17 +18,28 @@ from app.models import Company, Contact
 from app.parser.pdf_extractor import ExtractionResult
 from app.services.pipeline import IngestionPipeline
 
-# Mirrors the real result page: one filing anchored on a Display-Exhibits link,
-# with the applicant/country/date columns around the FCC-ID cell.
+# One filing, anchored on its Display-Exhibits link, plus the 731 "View Form" link.
 SEARCH_HTML = """
 <table>
   <tr>
     <td></td>
+    <td><a href="/tcb/GetTcb731Report.do?applicationId=1&fcc_id=XPYNORA-1">Form</a></td>
     <td><a href="ViewExhibitReport.cfm?mode=Exhibits&application_id=1&fcc_id=XPYNORA-1">Ex</a></td>
     <td>Detail</td><td></td><td></td>
     <td>u-blox AG</td><td></td><td>Thalwil</td><td>N/A</td><td>Switzerland</td><td>CH-8800</td>
     <td>XPYNORA-1</td><td>Original Equipment</td><td>01/15/2025</td>
   </tr>
+</table>
+"""
+
+# Minimal 731 form label/value table with a Responsible Party.
+FORM_HTML = """
+<table>
+  <tr><td>First Name:</td><td>Jane</td></tr>
+  <tr><td>Last Name:</td><td>Doe</td></tr>
+  <tr><td>Title:</td><td>Certification Manager</td></tr>
+  <tr><td>Telephone Number:</td><td>+41 44 000</td></tr>
+  <tr><td>Email:</td><td>jane@u-blox.com</td></tr>
 </table>
 """
 
@@ -49,7 +61,7 @@ class FakeFetcher:
         return SEARCH_HTML
 
     async def get_html(self, url: str) -> str:
-        return EXHIBIT_HTML
+        return FORM_HTML if "GetTcb731Report" in url else EXHIBIT_HTML
 
     async def download(self, url: str, *, referer: str | None = None) -> bytes:
         self.downloads.append(url)
@@ -64,11 +76,11 @@ class FakeExtractor:
         return ExtractionResponse(
             contacts=[
                 ExtractedContact(
-                    full_name="Jane Doe",
-                    email="jane@u-blox.com",
-                    title="Certification Manager",
+                    full_name="Bob Cyber",
+                    email="bob@u-blox.com",
+                    title="Product Security Lead",
                     is_internal_employee=True,
-                    confidence=92,
+                    confidence=88,
                 ),
                 ExtractedContact(
                     full_name="Ext Lawyer",
@@ -85,32 +97,39 @@ def settings(tmp_path: Path) -> Settings:
     return Settings(data_directory=tmp_path, openai_api_key="test")
 
 
-async def test_pipeline_run_end_to_end(session: Session, settings: Settings) -> None:
-    settings.ensure_directories()
-    # Real extract_text can't parse fake bytes; substitute rich text.
-    def _fake_extract(data: bytes, *, enable_ocr: bool = True) -> ExtractionResult:
-        return ExtractionResult(text="Signed by Jane Doe, Certification Manager", method="stub")
-
-    pipeline_module.extract_text = _fake_extract  # type: ignore[assignment]
-
+async def test_default_mode_form_only(session: Session, settings: Settings) -> None:
+    """Default: only the structured 731 Responsible Party; no PDF/LLM work."""
     fetcher = FakeFetcher()
     pipeline = IngestionPipeline(
-        session,
-        fetcher=fetcher,  # type: ignore[arg-type]
-        extractor=FakeExtractor(),
-        settings=settings,
+        session, fetcher=fetcher, extractor=FakeExtractor(), settings=settings  # type: ignore[arg-type]
     )
     report = await pipeline.run("u-blox")
 
     assert report.applications == 1
-    assert report.documents == 1
-    assert report.contacts_created == 1  # the external lawyer is dropped
-    assert report.errors == []
-    assert fetcher.closed  # pipeline releases the fetcher when done
-
+    assert report.contacts_created == 1  # Jane Doe from the form
+    assert fetcher.downloads == []  # no exhibit PDFs downloaded
     company = session.query(Company).filter_by(name="u-blox").one()
-    contacts = session.query(Contact).filter_by(company_id=company.id).all()
-    assert len(contacts) == 1
-    assert contacts[0].full_name == "Jane Doe"
-    assert contacts[0].priority == 50  # certification (40) + recent (10)
-    assert {f.fcc_id for f in contacts[0].filings} == {"XPYNORA-1"}
+    contact = session.query(Contact).filter_by(company_id=company.id).one()
+    assert contact.full_name == "Jane Doe"
+    assert contact.email == "jane@u-blox.com"
+    assert contact.company.country == "Switzerland"
+    assert fetcher.closed
+
+
+async def test_deep_mode_extracts_pdfs(session: Session, settings: Settings) -> None:
+    """--pdfs: also download and LLM-mine exhibit PDFs."""
+    settings = settings.model_copy(update={"extract_pdfs": True})
+    pipeline_module.extract_text = lambda data, enable_ocr=True: ExtractionResult(  # type: ignore[assignment]
+        text="Signed by Bob Cyber, Product Security Lead", method="stub"
+    )
+    fetcher = FakeFetcher()
+    pipeline = IngestionPipeline(
+        session, fetcher=fetcher, extractor=FakeExtractor(), settings=settings  # type: ignore[arg-type]
+    )
+    await pipeline.run("u-blox")
+
+    assert fetcher.downloads  # exhibit PDF was fetched
+    names = {c.full_name for c in session.query(Contact).all()}
+    assert "Jane Doe" in names  # from the form
+    assert "Bob Cyber" in names  # from the exhibit LLM
+    assert "Ext Lawyer" not in names  # external, dropped

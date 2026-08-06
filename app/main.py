@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import companies, contacts, filings, ingest, search
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
+
+# Built SPA — served by the API when present, so `uvicorn app.main:app` runs the
+# whole app locally as a single process.
+_FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
 
 def create_app() -> FastAPI:
@@ -54,15 +60,22 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(ingest.router)
 
-    @app.get("/", include_in_schema=False)
-    def root() -> RedirectResponse:
-        """Send the bare URL to the interactive API docs."""
-        return RedirectResponse(url="/docs")
-
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
         """Liveness probe."""
         return {"status": "ok"}
+
+    # Mount the SPA last so API routes take precedence; falls back to /docs when
+    # the frontend hasn't been built (e.g. the API-only cloud deploy).
+    if _FRONTEND_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="ui")
+        logger.info("serving_frontend", path=str(_FRONTEND_DIST))
+    else:
+
+        @app.get("/", include_in_schema=False)
+        def root() -> RedirectResponse:
+            """Send the bare URL to the interactive API docs."""
+            return RedirectResponse(url="/docs")
 
     logger.info("app_started")
     return app
