@@ -109,7 +109,7 @@ async def test_default_mode_form_only(session: Session, settings: Settings) -> N
 
     assert report.applications == 1
     assert report.contacts_created == 1  # Jane Doe from the form
-    assert fetcher.show_records == 1000  # structured mode pulls all filings
+    assert fetcher.show_records == 100  # structured mode default cap
     assert fetcher.downloads == []  # no exhibit PDFs downloaded
     company = session.query(Company).filter_by(name="u-blox").one()
     contact = session.query(Contact).filter_by(company_id=company.id).one()

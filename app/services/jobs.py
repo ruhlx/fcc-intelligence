@@ -53,12 +53,17 @@ def get_job(job_id: str) -> IngestJob | None:
 
 
 def settings_for(
-    provider: str | None, api_key: str | None, *, extract_pdfs: bool = False
+    provider: str | None,
+    api_key: str | None,
+    *,
+    extract_pdfs: bool = False,
+    max_filings: int | None = None,
 ) -> Settings:
     """Return settings with the request's provider / API key / mode overlaid.
 
     The base settings (and therefore ``DATABASE_URL``) are untouched; only the
-    LLM provider, matching key, and PDF-extraction mode are overridden.
+    LLM provider, matching key, PDF-extraction mode and per-run filing cap are
+    overridden.
     """
     base = get_settings()
     updates: dict[str, object] = {}
@@ -69,16 +74,25 @@ def settings_for(
         updates["gemini_api_key" if effective == "gemini" else "openai_api_key"] = api_key
     if extract_pdfs:
         updates["extract_pdfs"] = True
+    if max_filings and max_filings > 0:
+        updates["fcc_max_filings"] = max_filings
+        updates["fcc_max_filings_structured"] = max_filings
     return base.model_copy(update=updates) if updates else base
 
 
 async def _run(
-    job: IngestJob, provider: str | None, api_key: str | None, extract_pdfs: bool
+    job: IngestJob,
+    provider: str | None,
+    api_key: str | None,
+    extract_pdfs: bool,
+    max_filings: int | None,
 ) -> None:
     job.status = "running"
     logger.info("ingest_job_start", job_id=job.id, company=job.company, pdfs=extract_pdfs)
     try:
-        settings = settings_for(provider, api_key, extract_pdfs=extract_pdfs)
+        settings = settings_for(
+            provider, api_key, extract_pdfs=extract_pdfs, max_filings=max_filings
+        )
         with session_scope() as session:
             pipeline = build_pipeline(session, settings=settings)
             report = await pipeline.run(job.company)
@@ -103,10 +117,11 @@ def start_job(
     provider: str | None,
     api_key: str | None,
     extract_pdfs: bool = False,
+    max_filings: int | None = None,
 ) -> IngestJob:
     """Create a job and schedule it to run in the background."""
     job = create_job(company)
-    task = asyncio.create_task(_run(job, provider, api_key, extract_pdfs))
+    task = asyncio.create_task(_run(job, provider, api_key, extract_pdfs, max_filings))
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return job

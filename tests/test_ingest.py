@@ -45,6 +45,12 @@ def test_settings_for_extract_pdfs() -> None:
     assert jobs.settings_for(None, None).extract_pdfs is False
 
 
+def test_settings_for_max_filings_overrides_both_caps() -> None:
+    s = jobs.settings_for(None, None, max_filings=25)
+    assert s.fcc_max_filings == 25
+    assert s.fcc_max_filings_structured == 25
+
+
 def test_ingest_accepts_pdf_mode(client: TestClient) -> None:
     resp = client.post("/ingest", json={"company": "u-blox", "extract_pdfs": True})
     assert resp.status_code == 202
@@ -55,7 +61,7 @@ def client(monkeypatch) -> TestClient:
     # Stub only the actual crawl/LLM/DB work, but keep the REAL start_job so the
     # endpoint's asyncio.create_task scheduling is exercised (regression guard:
     # a sync endpoint would raise "no running event loop" here).
-    async def fake_run(job, provider, api_key, extract_pdfs=False):
+    async def fake_run(job, provider, api_key, extract_pdfs=False, max_filings=None):
         job.status = "completed"
 
     monkeypatch.setattr(jobs, "_run", fake_run)
@@ -83,7 +89,7 @@ def test_get_unknown_job_404(client: TestClient) -> None:
 
 
 def test_ingest_token_enforced(monkeypatch) -> None:
-    async def fake_run(job, provider, api_key, extract_pdfs=False):
+    async def fake_run(job, provider, api_key, extract_pdfs=False, max_filings=None):
         job.status = "completed"
 
     monkeypatch.setattr(jobs, "_run", fake_run)

@@ -49,6 +49,7 @@ export interface IngestRequest {
   provider?: LlmProvider;
   api_key?: string;
   extract_pdfs?: boolean;
+  max_filings?: number;
 }
 
 export interface IngestReport {

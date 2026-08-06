@@ -113,6 +113,12 @@ body {
 .ingest__field--grow {
   flex: 1 1 220px;
 }
+.ingest__field--max {
+  flex: 0 0 92px;
+}
+.ingest__field--max input {
+  width: 92px;
+}
 .ingest__field label {
   font-size: 0.72rem;
   text-transform: uppercase;

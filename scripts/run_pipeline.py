@@ -22,10 +22,18 @@ from app.services.factory import build_pipeline
 logger = get_logger(__name__)
 
 
-async def _run(company_names: list[str], *, extract_pdfs: bool) -> None:
+async def _run(
+    company_names: list[str], *, extract_pdfs: bool, limit: int | None
+) -> None:
     settings = get_settings()
+    updates: dict[str, object] = {}
     if extract_pdfs:
-        settings = settings.model_copy(update={"extract_pdfs": True})
+        updates["extract_pdfs"] = True
+    if limit and limit > 0:
+        updates["fcc_max_filings"] = limit
+        updates["fcc_max_filings_structured"] = limit
+    if updates:
+        settings = settings.model_copy(update=updates)
     for name in company_names:
         with session_scope() as session:
             pipeline = build_pipeline(session, settings=settings)
@@ -49,11 +57,17 @@ def main() -> None:
         action="store_true",
         help="Also download and LLM-mine exhibit PDFs (needs an LLM key/quota).",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap filings processed per company (default: config value).",
+    )
     args = parser.parse_args()
 
     settings = get_settings()
     configure_logging(level=settings.log_level, fmt=settings.log_format)
-    asyncio.run(_run(args.companies, extract_pdfs=args.pdfs))
+    asyncio.run(_run(args.companies, extract_pdfs=args.pdfs, limit=args.limit))
 
 
 if __name__ == "__main__":

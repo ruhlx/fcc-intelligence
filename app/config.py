@@ -85,9 +85,10 @@ class Settings(BaseSettings):
     # Cap filings processed per company in deep (--pdfs) mode — bounds PDF
     # downloads and LLM cost.
     fcc_max_filings: int = Field(default=10)
-    # Cap in default (structured, no-LLM) mode. Higher because the 731 form
-    # parse is free and fast — effectively "all filings" for most companies.
-    fcc_max_filings_structured: int = Field(default=1000)
+    # Cap in default (structured, no-LLM) mode. Each filing is a separate browser
+    # navigation, so large companies (Samsung, Bosch) can have thousands — keep a
+    # sane default and raise it (or use the per-run override) when you want more.
+    fcc_max_filings_structured: int = Field(default=100)
     # When False (default), only structured, freely-available contacts are
     # extracted (the 731 Responsible Party) — no PDF downloads, no LLM. When
     # True, exhibit PDFs are also downloaded and mined with the LLM.

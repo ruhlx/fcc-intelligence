@@ -25,6 +25,9 @@ class IngestRequest(BaseModel):
         default=False,
         description="Also download and LLM-mine exhibit PDFs (else 731 form only).",
     )
+    max_filings: int | None = Field(
+        default=None, ge=1, le=5000, description="Cap filings processed this run."
+    )
 
 
 class JobOut(BaseModel):
@@ -61,6 +64,7 @@ async def start_ingest(
         provider=req.provider,
         api_key=req.api_key,
         extract_pdfs=req.extract_pdfs,
+        max_filings=req.max_filings,
     )
     return JobOut(**job.to_dict())
 

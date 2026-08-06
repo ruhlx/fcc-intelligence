@@ -16,6 +16,7 @@ interface Props {
 export function IngestPanel({ onCompleted }: Props) {
   const [company, setCompany] = useState("");
   const [deep, setDeep] = useState(false);
+  const [maxFilings, setMaxFilings] = useState(50);
   const [job, setJob] = useState<IngestJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -51,6 +52,7 @@ export function IngestPanel({ onCompleted }: Props) {
         company: company.trim(),
         provider: "gemini",
         extract_pdfs: deep,
+        max_filings: maxFilings,
       });
       setJob(started);
       poll(started.id);
@@ -71,6 +73,18 @@ export function IngestPanel({ onCompleted }: Props) {
             value={company}
             onChange={(e) => setCompany(e.target.value)}
             required
+          />
+        </div>
+
+        <div className="ingest__field ingest__field--max">
+          <label htmlFor="max">Max filings</label>
+          <input
+            id="max"
+            type="number"
+            min={1}
+            max={5000}
+            value={maxFilings}
+            onChange={(e) => setMaxFilings(Math.max(1, Number(e.target.value) || 1))}
           />
         </div>
 
