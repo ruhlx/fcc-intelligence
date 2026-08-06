@@ -21,6 +21,10 @@ class IngestRequest(BaseModel):
     api_key: str | None = Field(
         default=None, description="LLM API key for this run (else uses server env)."
     )
+    extract_pdfs: bool = Field(
+        default=False,
+        description="Also download and LLM-mine exhibit PDFs (else 731 form only).",
+    )
 
 
 class JobOut(BaseModel):
@@ -52,7 +56,12 @@ async def start_ingest(
     in a threadpool with no loop and raise ``RuntimeError``).
     """
     _check_token(x_ingest_token)
-    job = start_job(req.company, provider=req.provider, api_key=req.api_key)
+    job = start_job(
+        req.company,
+        provider=req.provider,
+        api_key=req.api_key,
+        extract_pdfs=req.extract_pdfs,
+    )
     return JobOut(**job.to_dict())
 
 

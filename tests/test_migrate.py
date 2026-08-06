@@ -19,7 +19,8 @@ EXPECTED_TABLES = {
 
 
 def test_auto_migrate_defaults_false() -> None:
-    assert Settings().auto_migrate is False
+    # _env_file=None ignores any local .env so we assert the code default.
+    assert Settings(_env_file=None).auto_migrate is False
 
 
 def test_run_migrations_invokes_alembic(monkeypatch) -> None:

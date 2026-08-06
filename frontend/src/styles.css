@@ -134,6 +134,35 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
 }
+.ingest__mode {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: flex-end;
+  height: 38px;
+}
+.seg {
+  border: none;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg + .seg {
+  border-left: 1px solid var(--border);
+}
+.seg--on {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+.seg:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 .ingest__run {
   flex: 0 0 auto;
   height: 38px;

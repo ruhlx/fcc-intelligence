@@ -40,12 +40,22 @@ def test_settings_for_no_overrides_returns_base() -> None:
     assert isinstance(s, Settings)
 
 
+def test_settings_for_extract_pdfs() -> None:
+    assert jobs.settings_for(None, None, extract_pdfs=True).extract_pdfs is True
+    assert jobs.settings_for(None, None).extract_pdfs is False
+
+
+def test_ingest_accepts_pdf_mode(client: TestClient) -> None:
+    resp = client.post("/ingest", json={"company": "u-blox", "extract_pdfs": True})
+    assert resp.status_code == 202
+
+
 @pytest.fixture
 def client(monkeypatch) -> TestClient:
     # Stub only the actual crawl/LLM/DB work, but keep the REAL start_job so the
     # endpoint's asyncio.create_task scheduling is exercised (regression guard:
     # a sync endpoint would raise "no running event loop" here).
-    async def fake_run(job, provider, api_key):
+    async def fake_run(job, provider, api_key, extract_pdfs=False):
         job.status = "completed"
 
     monkeypatch.setattr(jobs, "_run", fake_run)
@@ -73,7 +83,7 @@ def test_get_unknown_job_404(client: TestClient) -> None:
 
 
 def test_ingest_token_enforced(monkeypatch) -> None:
-    async def fake_run(job, provider, api_key):
+    async def fake_run(job, provider, api_key, extract_pdfs=False):
         job.status = "completed"
 
     monkeypatch.setattr(jobs, "_run", fake_run)

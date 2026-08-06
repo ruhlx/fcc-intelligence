@@ -15,6 +15,7 @@ interface Props {
  */
 export function IngestPanel({ onCompleted }: Props) {
   const [company, setCompany] = useState("");
+  const [deep, setDeep] = useState(false);
   const [job, setJob] = useState<IngestJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -46,7 +47,11 @@ export function IngestPanel({ onCompleted }: Props) {
     e.preventDefault();
     setError(null);
     try {
-      const started = await api.startIngest({ company: company.trim(), provider: "gemini" });
+      const started = await api.startIngest({
+        company: company.trim(),
+        provider: "gemini",
+        extract_pdfs: deep,
+      });
       setJob(started);
       poll(started.id);
     } catch (err) {
@@ -69,6 +74,25 @@ export function IngestPanel({ onCompleted }: Props) {
           />
         </div>
 
+        <div className="ingest__mode" role="group" aria-label="Extraction mode">
+          <button
+            type="button"
+            className={`seg ${deep ? "" : "seg--on"}`}
+            onClick={() => setDeep(false)}
+            disabled={busy}
+          >
+            Responsible Party
+          </button>
+          <button
+            type="button"
+            className={`seg ${deep ? "seg--on" : ""}`}
+            onClick={() => setDeep(true)}
+            disabled={busy}
+          >
+            + Search PDFs
+          </button>
+        </div>
+
         <button
           type="submit"
           className="btn btn--primary ingest__run"
@@ -79,18 +103,28 @@ export function IngestPanel({ onCompleted }: Props) {
       </div>
 
       <div className="ingest__foot">
-        <StatusLine job={job} error={error} />
+        <StatusLine job={job} error={error} deep={deep} />
       </div>
     </form>
   );
 }
 
-function StatusLine({ job, error }: { job: IngestJob | null; error: string | null }) {
+function StatusLine({
+  job,
+  error,
+  deep,
+}: {
+  job: IngestJob | null;
+  error: string | null;
+  deep: boolean;
+}) {
   if (error) return <span className="ingest__status ingest__status--err">⚠️ {error}</span>;
   if (!job) {
     return (
       <span className="ingest__status ingest__status--hint">
-        Crawls FCC, extracts contacts with Gemini, and stores them.
+        {deep
+          ? "Reads the 731 Responsible Party plus exhibit PDFs (uses Gemini; slower)."
+          : "Reads the 731 Responsible Party from each filing — fast, no LLM."}
       </span>
     );
   }

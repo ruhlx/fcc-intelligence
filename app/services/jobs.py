@@ -52,11 +52,13 @@ def get_job(job_id: str) -> IngestJob | None:
     return _JOBS.get(job_id)
 
 
-def settings_for(provider: str | None, api_key: str | None) -> Settings:
-    """Return settings with the request's provider / API key overlaid.
+def settings_for(
+    provider: str | None, api_key: str | None, *, extract_pdfs: bool = False
+) -> Settings:
+    """Return settings with the request's provider / API key / mode overlaid.
 
     The base settings (and therefore ``DATABASE_URL``) are untouched; only the
-    LLM provider and the matching key are overridden for this run.
+    LLM provider, matching key, and PDF-extraction mode are overridden.
     """
     base = get_settings()
     updates: dict[str, object] = {}
@@ -65,14 +67,18 @@ def settings_for(provider: str | None, api_key: str | None) -> Settings:
     effective = (provider or base.llm_provider).lower()
     if api_key:
         updates["gemini_api_key" if effective == "gemini" else "openai_api_key"] = api_key
+    if extract_pdfs:
+        updates["extract_pdfs"] = True
     return base.model_copy(update=updates) if updates else base
 
 
-async def _run(job: IngestJob, provider: str | None, api_key: str | None) -> None:
+async def _run(
+    job: IngestJob, provider: str | None, api_key: str | None, extract_pdfs: bool
+) -> None:
     job.status = "running"
-    logger.info("ingest_job_start", job_id=job.id, company=job.company)
+    logger.info("ingest_job_start", job_id=job.id, company=job.company, pdfs=extract_pdfs)
     try:
-        settings = settings_for(provider, api_key)
+        settings = settings_for(provider, api_key, extract_pdfs=extract_pdfs)
         with session_scope() as session:
             pipeline = build_pipeline(session, settings=settings)
             report = await pipeline.run(job.company)
@@ -91,10 +97,16 @@ async def _run(job: IngestJob, provider: str | None, api_key: str | None) -> Non
         logger.error("ingest_job_failed", job_id=job.id, error=str(exc))
 
 
-def start_job(company: str, *, provider: str | None, api_key: str | None) -> IngestJob:
+def start_job(
+    company: str,
+    *,
+    provider: str | None,
+    api_key: str | None,
+    extract_pdfs: bool = False,
+) -> IngestJob:
     """Create a job and schedule it to run in the background."""
     job = create_job(company)
-    task = asyncio.create_task(_run(job, provider, api_key))
+    task = asyncio.create_task(_run(job, provider, api_key, extract_pdfs))
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return job
