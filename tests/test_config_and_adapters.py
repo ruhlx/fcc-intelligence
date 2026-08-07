@@ -24,6 +24,14 @@ def test_settings_env_override(monkeypatch) -> None:
     assert settings.openai_model == "gpt-test"
 
 
+def test_discovery_settings_defaults() -> None:
+    s = Settings(_env_file=None)
+    assert s.discover_regions == "europe"
+    assert s.discover_days == 3
+    assert s.discover_max_filings == 200
+    assert s.auto_discover_interval_hours == 0
+
+
 def test_saveable_categories() -> None:
     saveable = ContactCategory.saveable()
     assert ContactCategory.CERTIFICATION_MANAGER in saveable

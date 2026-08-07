@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { api } from "./api/client";
 import type { ContactFilters } from "./api/types";
 import { ContactsTable } from "./components/ContactsTable";
+import { DiscoverPanel } from "./components/DiscoverPanel";
 import { Filters } from "./components/Filters";
 import { IngestPanel } from "./components/IngestPanel";
 import { useContacts, useDebounced } from "./hooks/useContacts";
@@ -38,7 +39,11 @@ export default function App() {
         </a>
       </header>
 
+      <h2 className="section-label">Search a specific company</h2>
       <IngestPanel onCompleted={refresh} />
+
+      <h2 className="section-label">Or discover automatically — no company name needed</h2>
+      <DiscoverPanel onCompleted={refresh} />
 
       <section className="stats">
         <StatTile label="Contacts shown" value={loading ? "…" : contacts.length} />

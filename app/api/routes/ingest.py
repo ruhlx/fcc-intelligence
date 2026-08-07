@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.api.routes._job_common import JobOut, check_ingest_token
 from app.services.jobs import get_job, start_job
 
 router = APIRouter(tags=["ingest"])
@@ -30,23 +30,6 @@ class IngestRequest(BaseModel):
     )
 
 
-class JobOut(BaseModel):
-    """Job status response."""
-
-    id: str
-    company: str
-    status: str
-    created_at: str
-    report: dict[str, object] | None = None
-    error: str | None = None
-
-
-def _check_token(token: str | None) -> None:
-    configured = get_settings().ingest_token
-    if configured and token != configured:
-        raise HTTPException(status_code=401, detail="Invalid or missing ingest token")
-
-
 @router.post("/ingest", response_model=JobOut, status_code=202)
 async def start_ingest(
     req: IngestRequest,
@@ -58,7 +41,7 @@ async def start_ingest(
     ``asyncio.create_task`` on the running event loop (a sync endpoint would run
     in a threadpool with no loop and raise ``RuntimeError``).
     """
-    _check_token(x_ingest_token)
+    check_ingest_token(x_ingest_token)
     job = start_job(
         req.company,
         provider=req.provider,

@@ -11,8 +11,10 @@ from app.crawler.parsing import (
     parse_exhibit_list,
     parse_search_results,
 )
+from app.crawler.regions import EUROPE_COUNTRIES, is_european
 
 __all__ = [
+    "EUROPE_COUNTRIES",
     "ApplicationRow",
     "BrowserFetcher",
     "CompanyLookup",
@@ -22,6 +24,7 @@ __all__ = [
     "FccClient",
     "FccFetcher",
     "classify_document",
+    "is_european",
     "parse_exhibit_list",
     "parse_search_results",
 ]

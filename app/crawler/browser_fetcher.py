@@ -18,6 +18,7 @@ Requires the Playwright Firefox browser to be installed:
 from __future__ import annotations
 
 import contextlib
+from datetime import date
 from typing import Any, Protocol
 
 from app.config import Settings, get_settings
@@ -37,6 +38,17 @@ class FccFetcher(Protocol):
 
     async def search(self, company: str, *, show_records: int = 10) -> str:
         """Run the applicant-name search and return the result page HTML."""
+        ...
+
+    async def search_by_date_range(
+        self, date_from: date, date_to: date, *, show_records: int = 200
+    ) -> str:
+        """Run a company-agnostic search over a grant-date window.
+
+        Applicant name is left blank, so this discovers filings across *all*
+        companies within the date range — used to find new companies without
+        naming them up front.
+        """
         ...
 
     async def get_html(self, url: str) -> str:
@@ -73,6 +85,30 @@ class BrowserFetcher:
         logger.info("browser_started", engine="firefox")
 
     async def search(self, company: str, *, show_records: int = 10) -> str:
+        async with self._search_page() as page:
+            await page.fill("input[name=applicant_name]", company)
+            await page.click(_SUBMIT_SELECTOR)
+            await self._settle(page)
+            html = await self._enlarge_results(page, show_records)
+            logger.info("fcc_search_done", company=company, bytes=len(html))
+            return html
+
+    async def search_by_date_range(
+        self, date_from: date, date_to: date, *, show_records: int = 200
+    ) -> str:
+        async with self._search_page() as page:
+            await page.fill("input[name=grant_date_from]", date_from.strftime("%m/%d/%Y"))
+            await page.fill("input[name=grant_date_to]", date_to.strftime("%m/%d/%Y"))
+            await page.click(_SUBMIT_SELECTOR)
+            await self._settle(page)
+            html = await self._enlarge_results(page, show_records)
+            logger.info(
+                "fcc_date_search_done", date_from=str(date_from), date_to=str(date_to)
+            )
+            return html
+
+    @contextlib.asynccontextmanager
+    async def _search_page(self):  # type: ignore[no-untyped-def]
         await self._ensure()
         page = await self._ctx.new_page()
         try:
@@ -81,31 +117,27 @@ class BrowserFetcher:
                 wait_until="domcontentloaded",
                 timeout=_FORM_TIMEOUT,
             )
-            await page.fill("input[name=applicant_name]", company)
-            await page.click(_SUBMIT_SELECTOR)
-            await self._settle(page)
-
-            # Enlarge the page via the results form's show_records/FromRec fields
-            # to pull all filings in one request (bounded for safety).
-            capped = max(10, min(show_records, 5000))
-            if capped > 10 and await page.query_selector("input[name=next_value]"):
-                await page.evaluate(
-                    """(n) => {
-                        const sr = document.querySelector('input[name=show_records]');
-                        const fr = document.querySelector('input[name=FromRec]');
-                        if (sr) sr.value = String(n);
-                        if (fr) fr.value = '1';
-                    }""",
-                    capped,
-                )
-                await page.click("input[name=next_value]")
-                await self._settle(page)
-
-            html: str = await page.content()
-            logger.info("fcc_search_done", company=company, rows=capped, bytes=len(html))
-            return html
+            yield page
         finally:
             await page.close()
+
+    async def _enlarge_results(self, page: Any, show_records: int) -> str:
+        """Request more rows via the results form's show_records/FromRec fields
+        so all matching filings come back in one page (bounded for safety)."""
+        capped = max(10, min(show_records, 5000))
+        if capped > 10 and await page.query_selector("input[name=next_value]"):
+            await page.evaluate(
+                """(n) => {
+                    const sr = document.querySelector('input[name=show_records]');
+                    const fr = document.querySelector('input[name=FromRec]');
+                    if (sr) sr.value = String(n);
+                    if (fr) fr.value = '1';
+                }""",
+                capped,
+            )
+            await page.click("input[name=next_value]")
+            await self._settle(page)
+        return str(await page.content())
 
     async def get_html(self, url: str) -> str:
         await self._ensure()

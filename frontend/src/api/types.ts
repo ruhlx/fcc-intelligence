@@ -70,3 +70,34 @@ export interface IngestJob {
   report: IngestReport | null;
   error: string | null;
 }
+
+export type DiscoverRegions = "europe" | "all";
+
+export interface DiscoverRequest {
+  days?: number;
+  regions?: string;
+  extract_pdfs?: boolean;
+  max_filings?: number;
+}
+
+export interface DiscoverReport {
+  date_from: string;
+  date_to: string;
+  regions: string;
+  filings_scanned: number;
+  companies_touched: number;
+  documents: number;
+  contacts_created: number;
+  contacts_merged: number;
+  errors: string[];
+}
+
+export interface DiscoverJob {
+  id: string;
+  /** Synthetic label, e.g. "discovery:europe:3d" — not a real company name. */
+  company: string;
+  status: JobStatus;
+  created_at: string;
+  report: DiscoverReport | null;
+  error: string | null;
+}

@@ -94,7 +94,7 @@ def test_ingest_token_enforced(monkeypatch) -> None:
 
     monkeypatch.setattr(jobs, "_run", fake_run)
     monkeypatch.setattr(
-        "app.api.routes.ingest.get_settings", lambda: Settings(ingest_token="secret")
+        "app.api.routes._job_common.get_settings", lambda: Settings(ingest_token="secret")
     )
     client = TestClient(create_app())
     assert client.post("/ingest", json={"company": "x"}).status_code == 401

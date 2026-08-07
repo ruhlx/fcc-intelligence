@@ -8,12 +8,14 @@ extractor, DB session) are injected so the pipeline can be tested in isolation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.crawler import ApplicationRow, CompanyLookup, DocumentLocator, FccFetcher
 from app.crawler.parsing import parse_application_form
+from app.crawler.regions import resolve_region_filter
 from app.db.repositories import (
     CompanyRepository,
     DocumentRepository,
@@ -40,6 +42,26 @@ class PipelineReport:
     contacts_created: int = 0
     contacts_merged: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class DiscoveryReport:
+    """Aggregated results of a date-range discovery run (no company named)."""
+
+    date_from: date
+    date_to: date
+    regions: str
+    filings_scanned: int = 0
+    companies_touched: int = 0
+    documents: int = 0
+    contacts_created: int = 0
+    contacts_merged: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+# Both report types expose .documents / .contacts_created / .contacts_merged,
+# which is all the shared per-filing processing methods below need to touch.
+Report = PipelineReport | DiscoveryReport
 
 
 class IngestionPipeline:
@@ -110,8 +132,68 @@ class IngestionPipeline:
         )
         return report
 
+    async def run_discovery(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        regions: str | None = None,
+        max_filings: int | None = None,
+    ) -> DiscoveryReport:
+        """Find and process filings by date range, across all applicants.
+
+        Unlike :meth:`run`, no company name is given — filings are discovered
+        by grant-date window and (optionally) filtered to a set of countries,
+        so this is how new companies/contacts get found automatically instead
+        of naming a client up front. Each matching filing gets its own company
+        looked up / created from the row itself.
+        """
+        regions = regions if regions is not None else self._settings.discover_regions
+        date_to = date_to or date.today()
+        date_from = date_from or (date_to - timedelta(days=self._settings.discover_days))
+        cap = max_filings or self._settings.discover_max_filings
+        countries = resolve_region_filter(regions)
+
+        report = DiscoveryReport(date_from=date_from, date_to=date_to, regions=regions)
+        try:
+            rows = await self._lookup.find_recent_filings(
+                date_from, date_to, show_records=max(cap, 200), countries=countries
+            )
+            rows = rows[:cap]
+            report.filings_scanned = len(rows)
+
+            companies_seen: set[str] = set()
+            for row in rows:
+                if not row.grantee_name:
+                    continue
+                try:
+                    company = self._companies.get_or_create(
+                        row.grantee_name, country=row.country
+                    )
+                    self._session.flush()
+                    companies_seen.add(row.grantee_name)
+                    await self._process_application(company.id, row, report)
+                    self._session.commit()
+                except Exception as exc:  # broad: isolate per-filing failures
+                    self._session.rollback()
+                    logger.error("discovery_row_failed", fcc_id=row.fcc_id, error=str(exc))
+                    report.errors.append(f"{row.fcc_id}: {exc}")
+            report.companies_touched = len(companies_seen)
+        finally:
+            await self._fetcher.aclose()
+
+        logger.info(
+            "discovery_pipeline_done",
+            date_from=str(date_from),
+            date_to=str(date_to),
+            companies=report.companies_touched,
+            created=report.contacts_created,
+            merged=report.contacts_merged,
+        )
+        return report
+
     async def _process_application(
-        self, company_id: int, app: ApplicationRow, report: PipelineReport
+        self, company_id: int, app: ApplicationRow, report: Report
     ) -> None:
         filing = self._filings.get_or_create(
             company_id=company_id,
@@ -134,7 +216,7 @@ class IngestionPipeline:
                 )
 
     async def _process_form(
-        self, company_id: int, filing: Filing, form_url: str, report: PipelineReport
+        self, company_id: int, filing: Filing, form_url: str, report: Report
     ) -> None:
         """Parse the 731 form's Responsible Party structurally (no LLM needed)."""
         html = await self._fetcher.get_html(form_url)
@@ -171,7 +253,7 @@ class IngestionPipeline:
         company_id: int,
         filing: Filing,
         exhibit: object,
-        report: PipelineReport,
+        report: Report,
         referer: str | None,
     ) -> None:
         downloaded = await self._locator.download_exhibit(
@@ -207,7 +289,7 @@ class IngestionPipeline:
         text: str,
         doc_type_label: str,
         source: str,
-        report: PipelineReport,
+        report: Report,
     ) -> None:
         response = self._extractor.extract(
             document_text=text,

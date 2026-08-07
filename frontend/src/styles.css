@@ -89,6 +89,18 @@ body {
   color: var(--text);
 }
 
+.section-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 700;
+  margin: 20px 2px 8px;
+}
+.section-label:first-of-type {
+  margin-top: 0;
+}
+
 /* Ingest panel ------------------------------------------------------------ */
 .ingest {
   background: var(--surface);

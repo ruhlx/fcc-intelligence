@@ -87,6 +87,39 @@ poetry run python -m scripts.run_pipeline --pdfs u-blox
 The default mode is unaffected by LLM rate limits; deep mode is bounded by your
 provider's quota (e.g. Gemini's free tier is ~20 requests/day).
 
+## Discovery mode: find contacts without naming a company
+
+FCC has no "search by job title" or "search by country" field — but it does
+allow a **blank-applicant search over a grant-date window**, which returns
+filings from *every* company that got an authorization in that window. Discovery
+mode uses that to find new companies/contacts automatically, then keeps only
+the region you want (client-side, using the country each filing already
+reports) and reads each match's 731 Responsible Party — same free, no-LLM path
+as default mode.
+
+```bash
+# Last 3 days, Europe only (the defaults) — no company name needed:
+poetry run python -m scripts.discover_filings
+
+# Wider window, worldwide:
+poetry run python -m scripts.discover_filings --days 7 --regions all
+
+# Restrict to specific countries:
+poetry run python -m scripts.discover_filings --regions "Germany,France,Sweden"
+```
+
+The same control is in the UI (**"Or discover automatically"**, below the
+company search) and the API (`POST /discover { "days": 3, "regions": "europe" }`).
+
+**Run it automatically in the background:** set `AUTO_DISCOVER_INTERVAL_HOURS`
+in `.env` (e.g. `6`) and it runs on that interval for as long as
+`uvicorn app.main:app` stays up — no cron needed, no manual clicks. This is an
+in-process scheduler, not OS-level cron: the schedule resets if the server
+restarts, and it only runs while the process is alive.
+
+The Europe country list lives in [`app/crawler/regions.py`](app/crawler/regions.py)
+— edit `EUROPE_COUNTRIES` to adjust it.
+
 ## One-click deploy (Render)
 
 The repo ships a [`render.yaml`](render.yaml) Blueprint that provisions the whole

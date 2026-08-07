@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import companies, contacts, filings, ingest, search
+from app.api.routes import companies, contacts, discover, filings, ingest, search
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
 
@@ -38,7 +40,29 @@ def create_app() -> FastAPI:
                 run_migrations()
             except Exception as exc:  # broad: never crash boot on migration error
                 logger.error("auto_migrate_failed", error=str(exc))
+
+        # Optional in-process scheduler: periodically discover new filings
+        # (by date range + region) without anyone naming a company. Only runs
+        # while this process is alive — see start_auto_discover_loop().
+        auto_discover_task: asyncio.Task[None] | None = None
+        if settings.auto_discover_interval_hours > 0:
+            from app.services.jobs import start_auto_discover_loop
+
+            auto_discover_task = start_auto_discover_loop(
+                settings.auto_discover_interval_hours
+            )
+            logger.info(
+                "auto_discover_scheduled",
+                interval_hours=settings.auto_discover_interval_hours,
+                regions=settings.discover_regions,
+            )
+
         yield
+
+        if auto_discover_task is not None:
+            auto_discover_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await auto_discover_task
 
     app = FastAPI(
         title="FCC Regulatory Contact Intelligence Platform",
@@ -59,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(filings.router)
     app.include_router(search.router)
     app.include_router(ingest.router)
+    app.include_router(discover.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

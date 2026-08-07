@@ -94,6 +94,18 @@ class Settings(BaseSettings):
     # True, exhibit PDFs are also downloaded and mined with the LLM.
     extract_pdfs: bool = Field(default=False)
 
+    # --- Discovery mode (search by date range instead of company name) ---
+    # "europe" (default), "all", or a comma-separated list of FCC country names.
+    discover_regions: str = Field(default="europe")
+    # Lookback window (days) for a discovery run when not given explicitly.
+    discover_days: int = Field(default=3)
+    # Safety cap on how many *matching* filings a single discovery run processes.
+    discover_max_filings: int = Field(default=200)
+    # Background auto-discovery: runs every N hours while the API process is up.
+    # 0 (default) disables it — this is an in-process scheduler, not OS cron, so
+    # it only runs while `uvicorn app.main:app` is running.
+    auto_discover_interval_hours: float = Field(default=0)
+
     @property
     def pdf_directory(self) -> Path:
         """Directory where downloaded PDFs are stored."""

@@ -138,15 +138,24 @@ def _row_fields(
 ) -> tuple[str | None, str | None, str | None, date | None]:
     """Extract (applicant, city, country, date) from a row's non-empty cells.
 
-    Columns run: … Applicant, Address, City, State, Country, Zip, FCC ID,
-    Purpose, Final Action Date, … so we locate the FCC-ID cell and read the
-    others at fixed offsets from it.
+    Columns run: [combined "Detail Summary" link text], Applicant,
+    [Address Line — present only when the grantee's registered address has a
+    non-empty street line], City, State, Country, Zip, FCC ID, Purpose, Final
+    Action Date, …
+
+    The optional address line means the distance from Applicant to the FCC-ID
+    cell *varies* row to row (confirmed against ~60 live rows, e.g. an address
+    line silently shifted "applicant" to the street address for one company).
+    Applicant is therefore anchored forward from the row's start — it is
+    always the second non-empty cell — while City/State/Country/Date sit
+    *after* the optional address field and stay reliable at fixed offsets
+    from the FCC-ID cell.
     """
+    applicant = values[1] if len(values) > 1 else None
     try:
         i = values.index(fcc_id)
     except ValueError:
-        return None, None, None, None
-    applicant = values[i - 5] if i - 5 >= 0 else None
+        return applicant, None, None, None
     city = values[i - 4] if i - 4 >= 0 else None
     country = values[i - 2] if i - 2 >= 0 else None
     filing_date = _parse_date(values[i + 2]) if i + 2 < len(values) else None

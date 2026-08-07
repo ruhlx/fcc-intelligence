@@ -2,6 +2,8 @@ import type {
   Company,
   Contact,
   ContactFilters,
+  DiscoverJob,
+  DiscoverRequest,
   Filing,
   IngestJob,
   IngestRequest,
@@ -99,6 +101,14 @@ export const api = {
 
   getIngestJob(jobId: string): Promise<IngestJob> {
     return getJson<IngestJob>(`/ingest/${jobId}`);
+  },
+
+  startDiscover(req: DiscoverRequest): Promise<DiscoverJob> {
+    return postJson<DiscoverJob>("/discover", req);
+  },
+
+  getDiscoverJob(jobId: string): Promise<DiscoverJob> {
+    return getJson<DiscoverJob>(`/discover/${jobId}`);
   },
 
   /** Search/list contacts. Uses /search for free text, /contacts for filters. */
