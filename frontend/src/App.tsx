@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api } from "./api/client";
 import type { ContactFilters } from "./api/types";
@@ -8,11 +8,14 @@ import { Filters } from "./components/Filters";
 import { IngestPanel } from "./components/IngestPanel";
 import { useContacts, useDebounced } from "./hooks/useContacts";
 import { useStats } from "./hooks/useStats";
+import type { ColumnFilters } from "./lib/columnFilters";
+import { EMPTY_COLUMN_FILTERS, applyColumnFilters, uniqueSorted } from "./lib/columnFilters";
 
 const EMPTY: ContactFilters = { q: "", title: "", country: "", company: "", category: "" };
 
 export default function App() {
   const [filters, setFilters] = useState<ContactFilters>(EMPTY);
+  const [colFilters, setColFilters] = useState<ColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounced = useDebounced(filters, 300);
 
@@ -21,11 +24,33 @@ export default function App() {
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
+  // A new search/filter/crawl fetches a different set of rows — stale quick
+  // filters (e.g. a company name that no longer appears) would just silently
+  // hide everything, so reset them whenever the underlying data changes.
+  useEffect(() => {
+    setColFilters(EMPTY_COLUMN_FILTERS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(debounced), refreshKey]);
+
+  const options = useMemo(
+    () => ({
+      names: uniqueSorted(contacts.map((c) => c.full_name)),
+      titles: uniqueSorted(contacts.map((c) => c.title)),
+      companies: uniqueSorted(contacts.map((c) => c.company.name)),
+    }),
+    [contacts],
+  );
+
+  const visibleContacts = useMemo(
+    () => applyColumnFilters(contacts, colFilters),
+    [contacts, colFilters],
+  );
+
   const avgPriority = useMemo(() => {
-    if (contacts.length === 0) return 0;
-    const total = contacts.reduce((sum, c) => sum + c.priority, 0);
-    return Math.round(total / contacts.length);
-  }, [contacts]);
+    if (visibleContacts.length === 0) return 0;
+    const total = visibleContacts.reduce((sum, c) => sum + c.priority, 0);
+    return Math.round(total / visibleContacts.length);
+  }, [visibleContacts]);
 
   return (
     <div className="app">
@@ -46,7 +71,7 @@ export default function App() {
       <DiscoverPanel onCompleted={refresh} />
 
       <section className="stats">
-        <StatTile label="Contacts shown" value={loading ? "…" : contacts.length} />
+        <StatTile label="Contacts shown" value={loading ? "…" : visibleContacts.length} />
         <StatTile label="Avg priority" value={loading ? "…" : avgPriority} />
         <StatTile label="Companies" value={stats ? stats.companies : "…"} />
         <StatTile label="Filings" value={stats ? stats.filings : "…"} />
@@ -58,7 +83,15 @@ export default function App() {
         onReset={() => setFilters(EMPTY)}
       />
 
-      <ContactsTable contacts={contacts} loading={loading} error={error} />
+      <ContactsTable
+        contacts={visibleContacts}
+        totalBeforeColumnFilters={contacts.length}
+        loading={loading}
+        error={error}
+        filters={colFilters}
+        onFiltersChange={setColFilters}
+        options={options}
+      />
 
       <footer className="footer">
         API: <code>{api.baseUrl || "same origin"}</code>

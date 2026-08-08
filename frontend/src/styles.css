@@ -363,6 +363,52 @@ body {
   text-decoration: underline;
 }
 
+/* Per-column quick filters (client-side, on already-fetched rows) --------- */
+.table__filterrow th {
+  position: sticky;
+  top: 40px;
+  background: var(--surface);
+  padding: 6px 10px 10px;
+}
+.table__filterrow select {
+  width: 100%;
+  max-width: 160px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.table__filterrow select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+.table__empty {
+  padding: 28px 14px !important;
+  text-align: center;
+  color: var(--muted);
+}
+.table-filters-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.table-filters-bar__clear {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  height: auto;
+}
+
 /* Category badges --------------------------------------------------------- */
 .badge {
   display: inline-block;
