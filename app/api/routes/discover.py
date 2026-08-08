@@ -22,7 +22,10 @@ class DiscoverRequest(BaseModel):
     """Payload to kick off a date-range discovery run."""
 
     days: int | None = Field(
-        default=None, ge=1, le=90, description="Lookback window in days (server default if unset)"
+        default=None,
+        ge=1,
+        le=36500,  # ~100 years — not an FCC limit, just a sanity ceiling
+        description="Lookback window in days (server default if unset)",
     )
     regions: str | None = Field(
         default=None,

@@ -46,7 +46,13 @@ def test_discover_unknown_job_404(client: TestClient) -> None:
 
 def test_discover_rejects_out_of_range_days(client: TestClient) -> None:
     assert client.post("/discover", json={"days": 0}).status_code == 422
-    assert client.post("/discover", json={"days": 91}).status_code == 422
+    assert client.post("/discover", json={"days": 36501}).status_code == 422
+
+
+def test_discover_accepts_multi_year_window(client: TestClient) -> None:
+    # Not an FCC limit — confirm a large lookback (years) is accepted.
+    resp = client.post("/discover", json={"days": 3650})
+    assert resp.status_code == 202
 
 
 async def test_start_discovery_job_creates_trackable_job(monkeypatch) -> None:

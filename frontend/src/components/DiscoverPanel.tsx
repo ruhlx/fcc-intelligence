@@ -65,7 +65,7 @@ export function DiscoverPanel({ onCompleted }: Props) {
             id="days"
             type="number"
             min={1}
-            max={90}
+            max={36500}
             value={days}
             onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))}
           />
