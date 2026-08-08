@@ -5,6 +5,10 @@ const LABELS: Record<ContactCategory, string> = {
   PRODUCT_COMPLIANCE: "Compliance",
   REGULATORY_AFFAIRS: "Regulatory",
   PRODUCT_SECURITY: "Security",
+  QUALITY: "Quality",
+  ENGINEERING: "Engineering",
+  EXECUTIVE: "Executive",
+  IGNORE: "Other",
 };
 
 export function CategoryBadge({ category }: { category: ContactCategory }) {

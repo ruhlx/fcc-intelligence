@@ -1,10 +1,24 @@
-import type { ContactFilters } from "../api/types";
+import type { ContactCategory, ContactFilters } from "../api/types";
 
 interface Props {
   filters: ContactFilters;
   onChange: (next: ContactFilters) => void;
   onReset: () => void;
 }
+
+// Every classified category is stored now (not just the "core compliance"
+// ones) — this lets you narrow down to just the relevant titles when you want.
+const CATEGORY_OPTIONS: { value: ContactCategory | ""; label: string }[] = [
+  { value: "", label: "All categories" },
+  { value: "CERTIFICATION_MANAGER", label: "Certification Manager" },
+  { value: "REGULATORY_AFFAIRS", label: "Regulatory Affairs" },
+  { value: "PRODUCT_COMPLIANCE", label: "Product Compliance" },
+  { value: "PRODUCT_SECURITY", label: "Product Security" },
+  { value: "QUALITY", label: "Quality" },
+  { value: "ENGINEERING", label: "Engineering" },
+  { value: "EXECUTIVE", label: "Executive" },
+  { value: "IGNORE", label: "Other / unclassified" },
+];
 
 /**
  * Filter bar. Free-text search (`q`) uses the /search endpoint and, when set,
@@ -62,6 +76,22 @@ export function Filters({ filters, onChange, onReset }: Props) {
           disabled={searching}
           onChange={(e) => set({ company: e.target.value })}
         />
+      </div>
+
+      <div className="filters__field">
+        <label htmlFor="category">Category</label>
+        <select
+          id="category"
+          value={filters.category ?? ""}
+          disabled={searching}
+          onChange={(e) => set({ category: e.target.value as ContactCategory | "" })}
+        >
+          {CATEGORY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <button type="button" className="btn btn--ghost" onClick={onReset}>

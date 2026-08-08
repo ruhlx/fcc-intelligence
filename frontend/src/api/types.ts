@@ -16,11 +16,17 @@ export interface Filing {
   company_id: number;
 }
 
+// Every classified category is stored (not just the "core compliance" ones) —
+// category filtering happens at query time via GET /contacts?category=.
 export type ContactCategory =
   | "CERTIFICATION_MANAGER"
   | "PRODUCT_COMPLIANCE"
   | "REGULATORY_AFFAIRS"
-  | "PRODUCT_SECURITY";
+  | "PRODUCT_SECURITY"
+  | "QUALITY"
+  | "ENGINEERING"
+  | "EXECUTIVE"
+  | "IGNORE";
 
 export interface Contact {
   id: number;
@@ -40,6 +46,7 @@ export interface ContactFilters {
   title?: string;
   country?: string;
   company?: string;
+  category?: ContactCategory | "";
 }
 
 export type LlmProvider = "openai" | "gemini";

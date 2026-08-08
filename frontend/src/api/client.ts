@@ -121,6 +121,7 @@ export const api = {
       title: filters.title ?? "",
       country: filters.country ?? "",
       company: filters.company ?? "",
+      category: filters.category ?? "",
     });
   },
 

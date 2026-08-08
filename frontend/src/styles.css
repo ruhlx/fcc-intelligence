@@ -286,7 +286,8 @@ body {
   color: var(--muted);
   font-weight: 600;
 }
-.filters__field input {
+.filters__field input,
+.filters__field select {
   padding: 9px 11px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -294,11 +295,13 @@ body {
   color: var(--text);
   font-size: 0.9rem;
 }
-.filters__field input:focus {
+.filters__field input:focus,
+.filters__field select:focus {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
 }
-.filters__field input:disabled {
+.filters__field input:disabled,
+.filters__field select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -390,6 +393,29 @@ body {
   color: #b54708;
   border-color: #fedf89;
 }
+/* Non-"core compliance" categories are still stored & filterable, but kept
+   visually muted (neutral grays/teals) so the priority-relevant badges above
+   stand out at a glance. */
+.badge--quality {
+  background: #f0fdfa;
+  color: #0f766e;
+  border-color: #99f6e4;
+}
+.badge--engineering {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.badge--executive {
+  background: #faf5ff;
+  color: #7e22ce;
+  border-color: #e9d5ff;
+}
+.badge--ignore {
+  background: #f9fafb;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
 @media (prefers-color-scheme: dark) {
   .badge {
     background: color-mix(in srgb, currentColor 16%, transparent) !important;
@@ -406,6 +432,18 @@ body {
   }
   .badge--product_security {
     color: #fdb022;
+  }
+  .badge--quality {
+    color: #5eead4;
+  }
+  .badge--engineering {
+    color: #94a3b8;
+  }
+  .badge--executive {
+    color: #d8b4fe;
+  }
+  .badge--ignore {
+    color: #9ca3af;
   }
 }
 

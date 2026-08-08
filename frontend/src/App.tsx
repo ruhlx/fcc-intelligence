@@ -9,7 +9,7 @@ import { IngestPanel } from "./components/IngestPanel";
 import { useContacts, useDebounced } from "./hooks/useContacts";
 import { useStats } from "./hooks/useStats";
 
-const EMPTY: ContactFilters = { q: "", title: "", country: "", company: "" };
+const EMPTY: ContactFilters = { q: "", title: "", country: "", company: "", category: "" };
 
 export default function App() {
   const [filters, setFilters] = useState<ContactFilters>(EMPTY);

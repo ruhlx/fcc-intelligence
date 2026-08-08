@@ -1,7 +1,10 @@
 """Ingestion service - turns LLM output into persisted, scored contacts.
 
 Wires together Stage 5 (classification), Stage 6 (deduplication) and Stage 9
-(priority scoring). Only saveable categories are persisted.
+(priority scoring). Every internal contact is persisted regardless of title
+category — classification still drives priority score and lets callers filter
+(``GET /contacts?category=``) after the fact, but it no longer gates storage.
+Only non-employees (external lawyers, filing agents, test labs) are dropped.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.db.repositories import ContactRepository
-from app.enrichment.classification import classify_title, is_saveable
+from app.enrichment.classification import classify_title
 from app.enrichment.dedup import CandidateContact, ContactDeduplicator
 from app.enrichment.priority import PriorityInput, compute_priority
 from app.extractor.schemas import ExtractedContact
@@ -28,7 +31,6 @@ class IngestSummary:
 
     considered: int = 0
     skipped_external: int = 0
-    skipped_category: int = 0
     created: int = 0
     merged: int = 0
 
@@ -60,13 +62,6 @@ class ContactIngestionService:
                 continue
 
             category = classify_title(item.title)
-            if not is_saveable(category):
-                summary.skipped_category += 1
-                logger.debug(
-                    "skip_category", name=item.full_name, category=category.value
-                )
-                continue
-
             candidate = CandidateContact(
                 company_id=company_id,
                 full_name=item.full_name,
@@ -91,7 +86,7 @@ class ContactIngestionService:
             fcc_id=filing.fcc_id,
             created=summary.created,
             merged=summary.merged,
-            skipped=summary.skipped_external + summary.skipped_category,
+            skipped=summary.skipped_external,
         )
         return summary
 

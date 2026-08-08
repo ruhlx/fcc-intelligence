@@ -61,6 +61,12 @@ def test_list_contacts_and_filters(client: TestClient) -> None:
     assert len(client.get("/contacts?country=Switzerland").json()) == 1
     assert len(client.get("/contacts?company=u-blox").json()) == 1
     assert len(client.get("/contacts?country=Germany").json()) == 0
+    assert len(client.get("/contacts?category=CERTIFICATION_MANAGER").json()) == 1
+    assert len(client.get("/contacts?category=EXECUTIVE").json()) == 0
+
+
+def test_list_contacts_rejects_unknown_category(client: TestClient) -> None:
+    assert client.get("/contacts?category=NOT_A_REAL_CATEGORY").status_code == 422
 
 
 def test_contact_payload_includes_fcc_ids(client: TestClient) -> None:

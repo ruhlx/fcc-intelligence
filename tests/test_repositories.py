@@ -80,6 +80,9 @@ def test_contact_search_filters(session: Session, company: Company) -> None:
     assert len(repo.search(company="Globex")) == 1
     assert len(repo.search(query="cyber")) == 0
     assert len(repo.search(query="klaus")) == 1
+    assert len(repo.search(category=ContactCategory.CERTIFICATION_MANAGER)) == 1
+    assert len(repo.search(category=ContactCategory.REGULATORY_AFFAIRS)) == 1
+    assert len(repo.search(category=ContactCategory.EXECUTIVE)) == 0
     assert len(repo.search()) == 2
 
 
